@@ -91,3 +91,12 @@ export const placeGuestOrder = (tableNumber, data) => request(`/guest/table/${ta
 export const getGuestOrderStatus = (orderId) => request(`/guest/order/${orderId}/status`);
 export const requestGuestBill = (orderId) => request(`/guest/order/${orderId}/request-bill`, { method: 'POST' });
 
+// SaaS Vendor / Super Admin Client Customizer & Provisioner
+export const getAdminTenants = () => request('/admin/tenants');
+export const getTenantConfig = (slug) => request(`/admin/tenants/${slug}`);
+export const createTenant = (data) => request('/admin/tenants', { method: 'POST', body: data });
+export const updateTenant = (id, data) => request(`/admin/tenants/${id}`, { method: 'PUT', body: data });
+export const renewTenantSubscription = (id, days = 30) => request(`/admin/tenants/${id}/renew`, { method: 'PATCH', body: { days } });
+export const toggleTenantStatus = (id, status) => request(`/admin/tenants/${id}/status`, { method: 'PATCH', body: { status } });
+export const deleteTenant = (id) => request(`/admin/tenants/${id}`, { method: 'DELETE' });
+

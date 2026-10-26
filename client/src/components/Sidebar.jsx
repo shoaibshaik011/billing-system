@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import {
   LayoutDashboard, UtensilsCrossed, Grid3X3, ShoppingCart,
-  ChefHat, Users, Settings, Receipt, QrCode, Sparkles, MapPin
+  ChefHat, Users, Settings, Receipt, QrCode, Sparkles, MapPin,
+  ShieldCheck, ArrowLeft
 } from 'lucide-react';
 import * as api from '../api';
 
@@ -20,12 +21,17 @@ const navItems = [
   { path: '/billing', label: 'Billing & Invoices', icon: Receipt },
   { path: '/subscription', label: 'Software License', icon: Sparkles },
   { path: '/settings', label: 'Outlet Settings', icon: Settings },
+  { path: '/admin', label: 'SaaS Vendor Hub', icon: ShieldCheck, isVendor: true },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ tenant, basePath = '' }) {
   const [settings, setSettings] = useState(null);
 
   useEffect(() => {
+    if (tenant) {
+      // Applied directly from tenant
+      return;
+    }
     api.getSettings().then((data) => {
       if (data) {
         setSettings(data);
@@ -35,15 +41,39 @@ export default function Sidebar() {
         }
       }
     }).catch(() => {});
-  }, []);
+  }, [tenant]);
 
-  const restaurantName = settings?.restaurant_name || 'EMPIRE';
-  const iconEmoji = settings?.icon_emoji || '👨‍🍳';
-  const sinceYear = settings?.since_year || '1966';
-  const tagline = settings?.tagline || 'Restaurant & Hotel POS';
+  const currentBrand = tenant || settings;
+  const restaurantName = currentBrand?.restaurant_name || currentBrand?.name || 'EMPIRE';
+  const iconEmoji = currentBrand?.icon_emoji || '👨‍🍳';
+  const sinceYear = currentBrand?.since_year || '1966';
+  const tagline = currentBrand?.tagline || 'Restaurant & Hotel POS';
+  const address = currentBrand?.address || 'Main Branch';
 
   return (
     <aside className="sidebar">
+      {/* If in tenant view, show quick link back to SaaS Vendor Hub */}
+      {tenant && (
+        <div style={{ padding: '8px 14px 0' }}>
+          <Link
+            to="/admin"
+            className="flex items-center gap-1"
+            style={{
+              fontSize: '0.74rem',
+              color: 'var(--text-secondary)',
+              textDecoration: 'none',
+              fontWeight: 600,
+              padding: '4px 8px',
+              borderRadius: '6px',
+              background: 'var(--bg-tertiary)',
+            }}
+          >
+            <ArrowLeft size={13} />
+            <span>SaaS Vendor Hub</span>
+          </Link>
+        </div>
+      )}
+
       <div className="sidebar-header">
         <div className="sidebar-logo-container">
           <span style={{ fontSize: '1.4rem' }}>{iconEmoji}</span>
@@ -68,7 +98,7 @@ export default function Sidebar() {
           }}
         >
           <MapPin size={13} style={{ color: 'var(--empire-red)' }} />
-          <span style={{ fontWeight: 600 }}>{settings?.address ? settings.address.split(',')[0] : 'Main Branch'}</span>
+          <span style={{ fontWeight: 600 }}>{address.split(',')[0]}</span>
           <span className="badge-open" style={{ marginLeft: 'auto', fontSize: '0.65rem', padding: '2px 6px' }}>
             Open
           </span>
@@ -81,16 +111,27 @@ export default function Sidebar() {
             return <div key={i} className="nav-section-label">{item.label}</div>;
           }
           const Icon = item.icon;
+          const targetUrl = item.isVendor
+            ? '/admin'
+            : basePath
+            ? (item.path === '/' ? basePath : `${basePath}${item.path}`)
+            : item.path;
+
           return (
             <NavLink
               key={item.path}
-              to={item.path}
+              to={targetUrl}
               className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
               end={item.path === '/'}
             >
               <Icon className="nav-icon" size={19} />
               <span>{item.label}</span>
-              {item.path === '/qr-codes' && (
+              {item.isVendor && (
+                <span className="badge" style={{ fontSize: '0.62rem', padding: '1px 6px', background: '#38bdf8', color: '#0f172a', fontWeight: 800 }}>
+                  HUB
+                </span>
+              )}
+              {item.path === '/qr-codes' && !item.isVendor && (
                 <span className="badge" style={{ fontSize: '0.65rem', padding: '1px 6px', background: 'var(--empire-red)' }}>
                   New
                 </span>

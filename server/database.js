@@ -220,6 +220,94 @@ function initializeDatabase() {
     if (!settingsCols.includes('since_year')) {
       db.exec("ALTER TABLE settings ADD COLUMN since_year TEXT DEFAULT '1966';");
     }
+
+    // Master Multi-Tenant Restaurants Table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS tenants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        slug TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        niche TEXT DEFAULT 'cafe',
+        primary_color TEXT DEFAULT '#e11d24',
+        icon_emoji TEXT DEFAULT '🍽️',
+        since_year TEXT DEFAULT '2024',
+        tagline TEXT DEFAULT '',
+        owner_name TEXT DEFAULT '',
+        owner_phone TEXT DEFAULT '',
+        plan_name TEXT DEFAULT 'Pro Plan',
+        plan_price REAL DEFAULT 2999,
+        billing_cycle TEXT DEFAULT 'monthly',
+        status TEXT DEFAULT 'active',
+        renew_date TEXT DEFAULT (datetime('now', '+30 days')),
+        license_key TEXT,
+        max_tables INTEGER DEFAULT 30,
+        address TEXT DEFAULT '',
+        gst_number TEXT DEFAULT '',
+        tax_percentage REAL DEFAULT 5.0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
+
+    // Seed default tenants if empty
+    const tenantCount = db.prepare('SELECT COUNT(*) as count FROM tenants').get();
+    if (tenantCount.count === 0) {
+      const insertTenant = db.prepare(`
+        INSERT INTO tenants (slug, name, niche, primary_color, icon_emoji, since_year, tagline, owner_name, owner_phone, plan_name, plan_price, status, license_key, address)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      insertTenant.run(
+        'empire',
+        'Empire Restaurant',
+        'Dine-in & Mughlai',
+        '#e11d24',
+        '👨‍🍳',
+        '1966',
+        'Serving Authentic Taste Since 1966',
+        'Abdul Rahim',
+        '+91 98450 12345',
+        'Pro Plan',
+        2999,
+        'active',
+        'EMP-PRO-8924-X992-LIVE',
+        'Jayanagar 4th Block, Bengaluru'
+      );
+
+      insertTenant.run(
+        'brew-bean',
+        'Brew & Bean Cafe',
+        'Coffee & Bakery',
+        '#b45309',
+        '☕',
+        '2021',
+        'Artisan Brews & Fresh Bakes',
+        'Ananya Sharma',
+        '+91 98111 22334',
+        'Starter Plan',
+        1499,
+        'active',
+        'BRW-STA-4102-M881-LIVE',
+        'Indiranagar 100ft Road, Bengaluru'
+      );
+
+      insertTenant.run(
+        'sagar-veg',
+        'Sagar Pure Veg',
+        'Pure Veg & South Indian',
+        '#16a34a',
+        '🥗',
+        '1995',
+        'Traditional South Indian & North Indian Delights',
+        'Ramesh Bhat',
+        '+91 94480 99887',
+        'Enterprise Plan',
+        5999,
+        'active',
+        'SGR-ENT-9301-K554-LIVE',
+        'Malleshwaram 8th Cross, Bengaluru'
+      );
+    }
   } catch (err) {
     console.error('Migration warning:', err.message);
   }

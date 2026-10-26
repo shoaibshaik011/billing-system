@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import TenantLayout from './components/TenantLayout';
 
 import Dashboard from './pages/Dashboard';
 import Tables from './pages/Tables';
@@ -16,6 +17,7 @@ import QrCodes from './pages/QrCodes';
 import Subscription from './pages/Subscription';
 import Settings from './pages/Settings';
 import GuestOrder from './pages/GuestOrder';
+import SuperAdmin from './pages/SuperAdmin';
 
 export default function App() {
   return (
@@ -23,8 +25,26 @@ export default function App() {
       <Routes>
         {/* Guest Mobile Table QR Ordering App (Standalone, full-screen mobile friendly) */}
         <Route path="/table/:tableNumber" element={<GuestOrder />} />
+        <Route path="/r/:slug/table/:tableNumber" element={<GuestOrder />} />
 
-        {/* Restaurant Operations & SaaS POS Management */}
+        {/* Master SaaS Vendor Hub / Client Customizer & Dispatcher */}
+        <Route
+          path="/admin"
+          element={
+            <div className="app-layout">
+              <Sidebar />
+              <div className="main-content">
+                <Header />
+                <SuperAdmin />
+              </div>
+            </div>
+          }
+        />
+
+        {/* Customized Client Restaurant Software Instance (Multi-tenant via slug) */}
+        <Route path="/r/:slug/*" element={<TenantLayout />} />
+
+        {/* Default Restaurant Operations & SaaS POS Management */}
         <Route
           path="/*"
           element={

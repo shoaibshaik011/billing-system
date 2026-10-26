@@ -8,8 +8,9 @@ import toast, { Toaster } from 'react-hot-toast';
 import * as api from '../api';
 
 export default function GuestOrder() {
-  const { tableNumber } = useParams();
+  const { tableNumber, slug } = useParams();
   const [data, setData] = useState(null);
+  const [tenant, setTenant] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -32,7 +33,21 @@ export default function GuestOrder() {
 
   useEffect(() => {
     loadTableMenu();
-  }, [tableNumber]);
+    if (slug) {
+      api.getTenantConfig(slug)
+        .then((res) => {
+          if (res.success && res.tenant) {
+            setTenant(res.tenant);
+            const color = res.tenant.primary_color || '#e11d24';
+            document.documentElement.style.setProperty('--empire-red', color);
+            document.documentElement.style.setProperty('--accent-primary', color);
+            document.documentElement.style.setProperty('--empire-red-tint', `${color}14`);
+            document.documentElement.style.setProperty('--empire-red-border', `${color}35`);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [tableNumber, slug]);
 
   async function loadTableMenu() {
     try {
@@ -181,12 +196,14 @@ export default function GuestOrder() {
       >
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <span style={{ fontSize: '1.6rem' }}>👨‍🍳</span>
+            <span style={{ fontSize: '1.6rem' }}>{tenant?.icon_emoji || '👨‍🍳'}</span>
             <div>
               <h1 style={{ fontSize: '1.15rem', fontWeight: 900, margin: 0, letterSpacing: -0.3 }}>
-                {settings?.restaurant_name || 'EMPIRE RESTAURANT'}
+                {tenant?.name || settings?.restaurant_name || 'EMPIRE RESTAURANT'}
               </h1>
-              <span style={{ fontSize: '0.72rem', opacity: 0.9 }}>Since 1966 • Authentic Taste</span>
+              <span style={{ fontSize: '0.72rem', opacity: 0.9 }}>
+                {tenant?.tagline || 'Since 1966 • Authentic Taste'}
+              </span>
             </div>
           </div>
           <div
