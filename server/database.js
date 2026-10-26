@@ -206,6 +206,20 @@ function initializeDatabase() {
     if (!orderCols.includes('special_instructions')) {
       db.exec("ALTER TABLE orders ADD COLUMN special_instructions TEXT DEFAULT '';");
     }
+
+    const settingsCols = db.pragma('table_info(settings)').map(c => c.name);
+    if (!settingsCols.includes('primary_color')) {
+      db.exec("ALTER TABLE settings ADD COLUMN primary_color TEXT DEFAULT '#e11d24';");
+    }
+    if (!settingsCols.includes('tagline')) {
+      db.exec("ALTER TABLE settings ADD COLUMN tagline TEXT DEFAULT 'Restaurant & Hotel POS';");
+    }
+    if (!settingsCols.includes('icon_emoji')) {
+      db.exec("ALTER TABLE settings ADD COLUMN icon_emoji TEXT DEFAULT '🍽️';");
+    }
+    if (!settingsCols.includes('since_year')) {
+      db.exec("ALTER TABLE settings ADD COLUMN since_year TEXT DEFAULT '1966';");
+    }
   } catch (err) {
     console.error('Migration warning:', err.message);
   }

@@ -1,7 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Store, Receipt, Percent, ShieldCheck, Mail, Phone, MapPin } from 'lucide-react';
+import { Save, Store, Receipt, Palette, ShieldCheck, Mail, Phone, MapPin, Sparkles, Check, Globe } from 'lucide-react';
 import toast from 'react-hot-toast';
 import * as api from '../api';
+
+const THEME_PALETTES = [
+  { name: 'Empire Crimson', color: '#e11d24', desc: 'Dine-in, Biryani & Mughlai', emoji: '🍗' },
+  { name: 'Cafe Amber', color: '#b45309', desc: 'Coffee shops, Cafes & Bakeries', emoji: '☕' },
+  { name: 'Pure Veg Emerald', color: '#16a34a', desc: 'Veg Thali, South Indian & Sweets', emoji: '🥗' },
+  { name: 'Sapphire Blue', color: '#2563eb', desc: 'Bars, Rooftops & Continental', emoji: '🍸' },
+  { name: 'Sunset Orange', color: '#ea580c', desc: 'Pizzerias, Burgers & Fast Food', emoji: '🍕' },
+  { name: 'Boutique Purple', color: '#7c3aed', desc: 'Desserts, Lounges & Fine Dining', emoji: '🍰' },
+  { name: 'Charcoal Minimal', color: '#334155', desc: 'Modern Minimalist Eateries', emoji: '🍽️' },
+];
+
+const EMOJI_OPTIONS = ['👨‍🍳', '☕', '🍕', '🍔', '🥗', '🍛', '🍰', '🥐', '🍗', '🍜', '🍽️', '🍸'];
 
 export default function Settings() {
   const [form, setForm] = useState({
@@ -13,6 +25,10 @@ export default function Settings() {
     tax_percentage: 5,
     service_charge_percentage: 0,
     currency_symbol: '₹',
+    primary_color: '#e11d24',
+    tagline: 'Restaurant & Hotel POS',
+    icon_emoji: '👨‍🍳',
+    since_year: '1966',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -24,7 +40,17 @@ export default function Settings() {
   async function loadSettings() {
     try {
       const data = await api.getSettings();
-      if (data) setForm(data);
+      if (data) {
+        setForm((prev) => ({
+          ...prev,
+          ...data,
+          primary_color: data.primary_color || '#e11d24',
+          tagline: data.tagline || 'Restaurant & Hotel POS',
+          icon_emoji: data.icon_emoji || '👨‍🍳',
+          since_year: data.since_year || '1966',
+        }));
+        applyTheme(data.primary_color || '#e11d24');
+      }
     } catch (err) {
       toast.error('Failed to load settings');
     } finally {
@@ -32,12 +58,23 @@ export default function Settings() {
     }
   }
 
+  function applyTheme(color) {
+    document.documentElement.style.setProperty('--empire-red', color);
+    document.documentElement.style.setProperty('--accent-primary', color);
+  }
+
+  function handleColorSelect(color) {
+    setForm({ ...form, primary_color: color });
+    applyTheme(color);
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
     try {
       await api.updateSettings(form);
-      toast.success('Restaurant settings updated successfully!');
+      applyTheme(form.primary_color);
+      toast.success('Restaurant profile & theme updated successfully!');
     } catch (err) {
       toast.error(err.message || 'Failed to update settings');
     } finally {
@@ -46,21 +83,150 @@ export default function Settings() {
   }
 
   return (
-    <div className="page-content" style={{ maxWidth: 900 }}>
+    <div className="page-content" style={{ maxWidth: 960, margin: '0 auto' }}>
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Brand Theme & White-labeling Customizer */}
+        <div className="card animate-in">
+          <div className="card-header flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Palette className="text-primary" size={20} />
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800 }}>Custom Theme & Brand Identity</h3>
+            </div>
+            <span className="badge badge-primary">White-label Ready</span>
+          </div>
+
+          <div className="card-body space-y-6">
+            {/* Color Palette Selector */}
+            <div>
+              <label className="text-xs font-semibold text-muted mb-2 block uppercase tracking-wider">
+                Select Brand Primary Color
+              </label>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                  gap: 12,
+                }}
+              >
+                {THEME_PALETTES.map((theme) => {
+                  const isSelected = form.primary_color?.toLowerCase() === theme.color.toLowerCase();
+                  return (
+                    <div
+                      key={theme.name}
+                      onClick={() => handleColorSelect(theme.color)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: '12px 14px',
+                        borderRadius: 'var(--radius-md)',
+                        border: `2px solid ${isSelected ? theme.color : 'var(--border-primary)'}`,
+                        background: isSelected ? `${theme.color}0d` : '#ffffff',
+                        cursor: 'pointer',
+                        transition: 'all 150ms ease',
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: '50%',
+                          background: theme.color,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          flexShrink: 0,
+                          boxShadow: isSelected ? `0 0 10px ${theme.color}66` : 'none',
+                        }}
+                      >
+                        {isSelected && <Check size={16} />}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: '0.85rem' }}>{theme.name}</div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)' }}>{theme.desc}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Logo Emoji & Established Year */}
+            <div className="grid-2">
+              <div>
+                <label className="text-xs font-semibold text-muted mb-2 block uppercase tracking-wider">
+                  Select Mascot / Logo Icon
+                </label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {EMOJI_OPTIONS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => setForm({ ...form, icon_emoji: emoji })}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 'var(--radius-md)',
+                        fontSize: '1.25rem',
+                        border: `2px solid ${form.icon_emoji === emoji ? form.primary_color : 'var(--border-primary)'}`,
+                        background: form.icon_emoji === emoji ? `${form.primary_color}1a` : '#ffffff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-muted mb-1 block uppercase tracking-wider">
+                  Year Established / Since
+                </label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="e.g. 1966, 2021"
+                  value={form.since_year || ''}
+                  onChange={(e) => setForm({ ...form, since_year: e.target.value })}
+                />
+              </div>
+            </div>
+
+            {/* Tagline */}
+            <div>
+              <label className="text-xs font-semibold text-muted mb-1 block uppercase tracking-wider">
+                Sub-brand Tagline / Description
+              </label>
+              <input
+                type="text"
+                className="input"
+                placeholder="e.g. Artisan Brews & Bakery • Authentic Taste"
+                value={form.tagline || ''}
+                onChange={(e) => setForm({ ...form, tagline: e.target.value })}
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Restaurant Identity */}
         <div className="card">
           <div className="card-header flex items-center gap-2 mb-4">
             <Store className="text-primary" size={20} />
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Restaurant Profile</h3>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Restaurant Profile</h3>
           </div>
-          <div className="space-y-4">
+          <div className="card-body space-y-4">
             <div>
-              <label className="text-xs font-semibold text-muted mb-1 block">Restaurant / Hotel Name *</label>
+              <label className="text-xs font-semibold text-muted mb-1 block">Restaurant / Cafe Name *</label>
               <input
                 type="text"
                 className="input"
                 required
+                placeholder="e.g. Blue Tokai Coffee, Sagar Veg"
                 value={form.restaurant_name}
                 onChange={(e) => setForm({ ...form, restaurant_name: e.target.value })}
               />
@@ -68,14 +234,12 @@ export default function Settings() {
             <div className="grid-2">
               <div>
                 <label className="text-xs font-semibold text-muted mb-1 block">Contact Phone Number</label>
-                <div className="relative">
-                  <input
-                    type="tel"
-                    className="input"
-                    value={form.phone || ''}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  />
-                </div>
+                <input
+                  type="tel"
+                  className="input"
+                  value={form.phone || ''}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                />
               </div>
               <div>
                 <label className="text-xs font-semibold text-muted mb-1 block">Email Address</label>
@@ -103,16 +267,16 @@ export default function Settings() {
         <div className="card">
           <div className="card-header flex items-center gap-2 mb-4">
             <Receipt className="text-info" size={20} />
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Taxation & Billing Rules</h3>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Taxation & Billing Rules</h3>
           </div>
-          <div className="space-y-4">
+          <div className="card-body space-y-4">
             <div className="grid-2">
               <div>
-                <label className="text-xs font-semibold text-muted mb-1 block">GSTIN / Tax Identification Number</label>
+                <label className="text-xs font-semibold text-muted mb-1 block">GSTIN / Tax ID</label>
                 <input
                   type="text"
                   className="input"
-                  placeholder="e.g. 27AAAAA0000A1Z5"
+                  placeholder="e.g. 29AAAAA0000A1Z5"
                   value={form.gst_number || ''}
                   onChange={(e) => setForm({ ...form, gst_number: e.target.value })}
                 />
@@ -143,7 +307,6 @@ export default function Settings() {
                   />
                   <span className="text-muted text-sm font-bold">%</span>
                 </div>
-                <span className="text-xs text-muted">Applied to all dining and takeaway orders</span>
               </div>
 
               <div>
@@ -160,37 +323,14 @@ export default function Settings() {
                   />
                   <span className="text-muted text-sm font-bold">%</span>
                 </div>
-                <span className="text-xs text-muted">Optional restaurant service fee</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Commercial Selling Info */}
-        <div
-          className="card"
-          style={{
-            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.08))',
-            borderColor: 'rgba(99, 102, 241, 0.3)',
-          }}
-        >
-          <div className="card-header flex items-center gap-2 mb-2">
-            <ShieldCheck className="text-primary" size={20} />
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Commercial Distribution & White-labeling</h3>
-          </div>
-          <p className="text-sm text-muted mb-4">
-            This BillFlow hotel billing software is designed for multi-tenant and standalone restaurant deployments. You can re-brand this for any hotel or restaurant client by configuring their business profile above.
-          </p>
-          <div className="flex items-center gap-3 text-xs text-muted">
-            <span className="badge badge-success">✓ Unlimited Tables & KOTs</span>
-            <span className="badge badge-success">✓ Offline-first SQLite Engine</span>
-            <span className="badge badge-success">✓ Thermal Printer Ready</span>
-          </div>
-        </div>
-
         <div className="flex justify-end pt-2">
-          <button type="submit" className="btn btn-primary" disabled={saving}>
-            <Save size={16} /> {saving ? 'Saving...' : 'Save Configuration'}
+          <button type="submit" className="btn btn-primary btn-lg" disabled={saving}>
+            <Save size={18} /> {saving ? 'Saving...' : 'Save & Apply Custom Theme'}
           </button>
         </div>
       </form>

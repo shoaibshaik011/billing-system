@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, UtensilsCrossed, Grid3X3, ShoppingCart,
   ChefHat, Users, Settings, Receipt, QrCode, Sparkles, MapPin
 } from 'lucide-react';
+import * as api from '../api';
 
 const navItems = [
   { label: 'Operations', isSection: true },
@@ -22,18 +23,37 @@ const navItems = [
 ];
 
 export default function Sidebar() {
+  const [settings, setSettings] = useState(null);
+
+  useEffect(() => {
+    api.getSettings().then((data) => {
+      if (data) {
+        setSettings(data);
+        if (data.primary_color) {
+          document.documentElement.style.setProperty('--empire-red', data.primary_color);
+          document.documentElement.style.setProperty('--accent-primary', data.primary_color);
+        }
+      }
+    }).catch(() => {});
+  }, []);
+
+  const restaurantName = settings?.restaurant_name || 'EMPIRE';
+  const iconEmoji = settings?.icon_emoji || '👨‍🍳';
+  const sinceYear = settings?.since_year || '1966';
+  const tagline = settings?.tagline || 'Restaurant & Hotel POS';
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
         <div className="sidebar-logo-container">
-          <span style={{ fontSize: '1.4rem' }}>👨‍🍳</span>
-          <span className="sidebar-logo-badge">1966</span>
+          <span style={{ fontSize: '1.4rem' }}>{iconEmoji}</span>
+          <span className="sidebar-logo-badge">{sinceYear}</span>
         </div>
         <div className="sidebar-brand">
           <h1>
-            <span className="empire-accent">EMPIRE</span>
+            <span className="empire-accent">{restaurantName}</span>
           </h1>
-          <span className="sidebar-tagline">Restaurant & Hotel POS</span>
+          <span className="sidebar-tagline">{tagline}</span>
         </div>
       </div>
 
@@ -48,7 +68,7 @@ export default function Sidebar() {
           }}
         >
           <MapPin size={13} style={{ color: 'var(--empire-red)' }} />
-          <span style={{ fontWeight: 600 }}>Jayanagar, Bengaluru</span>
+          <span style={{ fontWeight: 600 }}>{settings?.address ? settings.address.split(',')[0] : 'Main Branch'}</span>
           <span className="badge-open" style={{ marginLeft: 'auto', fontSize: '0.65rem', padding: '2px 6px' }}>
             Open
           </span>
@@ -82,9 +102,9 @@ export default function Sidebar() {
 
       <div className="sidebar-footer">
         <div style={{ fontWeight: 700, color: 'var(--empire-red)', marginBottom: 2 }}>
-          Empire Restaurant
+          {restaurantName}
         </div>
-        <span>Since 1966 • POS v2.4 SaaS</span>
+        <span>Since {sinceYear} • POS v2.4 SaaS</span>
       </div>
     </aside>
   );

@@ -147,15 +147,19 @@ router.put('/settings', (req, res) => {
   const db = getDb();
   const {
     restaurant_name, address, phone, email, gst_number,
-    tax_percentage, service_charge_percentage, currency_symbol
+    tax_percentage, service_charge_percentage, currency_symbol,
+    primary_color, tagline, icon_emoji, since_year
   } = req.body;
   db.prepare(`
     UPDATE settings SET restaurant_name=?, address=?, phone=?, email=?, gst_number=?,
-    tax_percentage=?, service_charge_percentage=?, currency_symbol=?, updated_at=datetime('now')
+    tax_percentage=?, service_charge_percentage=?, currency_symbol=?,
+    primary_color=?, tagline=?, icon_emoji=?, since_year=?,
+    updated_at=datetime('now')
     WHERE id=1
   `).run(
     restaurant_name, address || '', phone || '', email || '', gst_number || '',
-    tax_percentage ?? 5, service_charge_percentage ?? 0, currency_symbol || '₹'
+    tax_percentage ?? 5, service_charge_percentage ?? 0, currency_symbol || '₹',
+    primary_color || '#e11d24', tagline || 'Restaurant & Hotel POS', icon_emoji || '🍽️', since_year || '1966'
   );
   const settings = db.prepare('SELECT * FROM settings WHERE id = 1').get();
   res.json(settings);
