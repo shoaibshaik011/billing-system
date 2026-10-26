@@ -1,0 +1,16 @@
+{
+  "short_name": "Empire POS",
+  "name": "Empire Restaurant & Hotel Billing System",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#e11d24",
+  "display": "standalone",
+  "orientation": "any"
+}

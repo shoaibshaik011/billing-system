@@ -1,0 +1,15 @@
+{
+  "name": "empire-hotel-billing-system",
+  "version": "1.0.0",
+  "description": "All-in-one Restaurant Billing POS, Table Management, KDS and Guest QR Ordering System",
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "build": "npm --prefix client install && npm --prefix client run build && npm --prefix server install",
+    "start": "node server/index.js",
+    "dev:server": "node server/index.js",
+    "dev:client": "npm --prefix client run dev"
+  },
+  "keywords": ["pos", "restaurant-billing", "qr-ordering", "hotel-management"],
+  "author": "",
+  "license": "ISC"
+}
