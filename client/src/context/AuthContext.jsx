@@ -20,10 +20,11 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(false);
 
   // Login with Username and Password
-  const loginWithPassword = async (username, password) => {
+  const loginWithPassword = async (username, password, tenantSlug) => {
     setLoading(true);
     try {
-      const res = await api.login({ username, password });
+      const activeSlug = tenantSlug || api.getActiveTenantSlug();
+      const res = await api.login({ username, password, tenant_slug: activeSlug });
       if (res.success && res.user) {
         setUser(res.user);
         setToken(res.token);
@@ -38,10 +39,11 @@ export function AuthProvider({ children }) {
   };
 
   // Login with 4-Digit Quick PIN (Numpad)
-  const loginWithPin = async (pin) => {
+  const loginWithPin = async (pin, tenantSlug) => {
     setLoading(true);
     try {
-      const res = await api.login({ pin });
+      const activeSlug = tenantSlug || api.getActiveTenantSlug();
+      const res = await api.login({ pin, tenant_slug: activeSlug });
       if (res.success && res.user) {
         setUser(res.user);
         setToken(res.token);

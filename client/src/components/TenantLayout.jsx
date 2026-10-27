@@ -156,7 +156,7 @@ export default function TenantLayout() {
       <Route
         path="/*"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute tenantSlug={slug}>
             <div className="app-layout">
               <Sidebar tenant={tenant} basePath={`/r/${slug}`} />
               <div className="main-content">

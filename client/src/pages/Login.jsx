@@ -11,7 +11,9 @@ import * as api from '../api';
 export default function Login({ tenant: propTenant }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { slug } = useParams();
+  const { slug: routeSlug } = useParams();
+  const pathMatch = location.pathname.match(/^\/r\/([^\/]+)/);
+  const slug = propTenant?.slug || routeSlug || pathMatch?.[1] || '';
   const { loginWithPassword, loginWithPin, setAuthSession, isAuthenticated, user } = useAuth();
 
   const [activeTab, setActiveTab] = useState('pin'); // 'pin', 'password', or 'reset'
@@ -72,13 +74,20 @@ export default function Login({ tenant: propTenant }) {
     }
   }, [slug, propTenant]);
 
-  // If already authenticated, redirect to destination
+  // If already authenticated with matching tenant or superadmin, redirect to destination
   useEffect(() => {
     if (isAuthenticated) {
-      const target = slug ? `/r/${slug}` : '/';
-      navigate(target, { replace: true });
+      if (slug) {
+        if (user?.tenant_slug === slug || user?.role === 'superadmin') {
+          navigate(`/r/${slug}`, { replace: true });
+        }
+      } else {
+        if (!user?.tenant_slug || user?.role === 'superadmin') {
+          navigate(user?.role === 'superadmin' ? '/admin' : '/', { replace: true });
+        }
+      }
     }
-  }, [isAuthenticated, navigate, slug]);
+  }, [isAuthenticated, user, navigate, slug]);
 
   // Handle PIN Numpad button click
   const handlePinNum = (digit) => {
@@ -103,7 +112,7 @@ export default function Login({ tenant: propTenant }) {
   const submitPin = async (pinToSubmit) => {
     setLoading(true);
     try {
-      const res = await loginWithPin(pinToSubmit);
+      const res = await loginWithPin(pinToSubmit, slug);
       toast.success(`Welcome back, ${res.user.name}!`);
       const target = slug ? `/r/${slug}` : (res.user.role === 'superadmin' ? '/admin' : '/');
       navigate(target, { replace: true });
@@ -125,7 +134,7 @@ export default function Login({ tenant: propTenant }) {
 
     setLoading(true);
     try {
-      const res = await loginWithPassword(username, password);
+      const res = await loginWithPassword(username, password, slug);
       toast.success(`Welcome back, ${res.user.name}!`);
       const target = slug ? `/r/${slug}` : (res.user.role === 'superadmin' ? '/admin' : '/');
       navigate(target, { replace: true });
