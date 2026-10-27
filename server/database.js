@@ -407,7 +407,7 @@ function initializeDatabase() {
     db.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
+        username TEXT NOT NULL,
         name TEXT NOT NULL,
         email TEXT DEFAULT '',
         password TEXT NOT NULL,
@@ -418,9 +418,43 @@ function initializeDatabase() {
         is_active INTEGER DEFAULT 1,
         last_login TEXT,
         created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT DEFAULT (datetime('now'))
+        updated_at TEXT DEFAULT (datetime('now')),
+        UNIQUE(username, tenant_slug)
       );
     `);
+
+    // Migrate users table to composite UNIQUE(username, tenant_slug) if still globally unique
+    const usersSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'").get()?.sql || '';
+    if (usersSql.includes('username TEXT UNIQUE NOT NULL') || usersSql.includes('username TEXT NOT NULL UNIQUE')) {
+      try {
+        db.exec(`
+          PRAGMA foreign_keys=off;
+          CREATE TABLE IF NOT EXISTS users_migrated (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            name TEXT NOT NULL,
+            email TEXT DEFAULT '',
+            password TEXT NOT NULL,
+            pin TEXT DEFAULT '1234',
+            role TEXT DEFAULT 'cashier' CHECK(role IN ('admin', 'manager', 'cashier', 'waiter', 'superadmin')),
+            tenant_slug TEXT DEFAULT '',
+            avatar TEXT DEFAULT '👨‍🍳',
+            is_active INTEGER DEFAULT 1,
+            last_login TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(username, tenant_slug)
+          );
+          INSERT OR IGNORE INTO users_migrated (id, username, name, email, password, pin, role, tenant_slug, avatar, is_active, last_login, created_at, updated_at)
+          SELECT id, username, name, email, password, pin, role, COALESCE(tenant_slug, ''), avatar, is_active, last_login, created_at, updated_at FROM users;
+          DROP TABLE users;
+          ALTER TABLE users_migrated RENAME TO users;
+          PRAGMA foreign_keys=on;
+        `);
+      } catch (e) {
+        console.error('Users migration error:', e.message);
+      }
+    }
 
     // Seed default users if empty
     const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
