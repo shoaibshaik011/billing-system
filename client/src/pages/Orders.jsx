@@ -236,7 +236,10 @@ export default function Orders() {
 
   // Filtered orders list for list view
   const displayOrders = orders.filter((o) => {
+    const isOnline = o.payment_status === 'paid' || o.payment_preference === 'pay_here';
     if (orderFilter === 'qr') return o.order_source === 'qr_guest';
+    if (orderFilter === 'counter') return !isOnline;
+    if (orderFilter === 'paid_online') return isOnline;
     if (orderFilter === 'dine-in') return o.order_type === 'dine-in' && o.order_source !== 'qr_guest';
     if (orderFilter === 'takeaway') return o.order_type === 'takeaway';
     return true;
@@ -245,7 +248,7 @@ export default function Orders() {
   // POS mode
   if (viewMode === 'pos' && currentOrder) {
     const isQrOrder = currentOrder.order_source === 'qr_guest';
-    const isPaidOnline = currentOrder.payment_status === 'paid' || currentOrder.payment_method === 'upi';
+    const isPaidOnline = currentOrder.payment_status === 'paid' || currentOrder.payment_preference === 'pay_here';
 
     return (
       <div className="pos-layout">
@@ -512,6 +515,46 @@ export default function Orders() {
                 </div>
               </div>
 
+              {/* Customer Payment Preference Callout in POS */}
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 10,
+                  background: isPaidOnline ? '#f0fdf4' : '#fffbeb',
+                  border: `1.5px solid ${isPaidOnline ? '#86efac' : '#fde047'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 10,
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <span style={{ fontSize: '1.2rem' }}>{isPaidOnline ? '🟢' : '💵'}</span>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.82rem', color: isPaidOnline ? '#15803d' : '#92400e' }}>
+                      {isPaidOnline ? 'Paid Online via UPI' : 'Payment Preference: Pay at Counter'}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: isPaidOnline ? '#166534' : '#a16207' }}>
+                      {isPaidOnline
+                        ? 'Customer verified online UPI payment'
+                        : 'Customer will settle cash, card or UPI at counter'}
+                    </div>
+                  </div>
+                </div>
+                <span
+                  style={{
+                    background: isPaidOnline ? '#16a34a' : '#d97706',
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    fontSize: '0.68rem',
+                    padding: '3px 8px',
+                    borderRadius: 12,
+                  }}
+                >
+                  {isPaidOnline ? 'PAID ✓' : 'PAY AT COUNTER'}
+                </span>
+              </div>
+
               <div className="cart-actions" style={{ flexDirection: 'column' }}>
                 <div className="flex gap-2" style={{ width: '100%' }}>
                   <button className="btn btn-primary" style={{ flex: 1 }} onClick={sendToKitchen}>
@@ -522,8 +565,8 @@ export default function Orders() {
                   <button className="btn btn-ghost btn-sm" onClick={() => setShowDiscount(true)}>
                     <Percent size={14} /> Discount
                   </button>
-                  <button className="btn btn-success btn-sm" style={{ flex: 1 }} onClick={() => setShowPayment(true)}>
-                    <CreditCard size={14} /> {isPaidOnline ? 'Print Receipt & Close' : 'Pay & Close'}
+                  <button className="btn btn-success btn-sm" style={{ flex: 1, fontWeight: 800 }} onClick={() => setShowPayment(true)}>
+                    <CreditCard size={14} /> {isPaidOnline ? 'Print Receipt & Close' : '💵 Pay at Counter (Settle Bill)'}
                   </button>
                   <button
                     className="btn btn-ghost btn-sm"
@@ -663,12 +706,23 @@ export default function Orders() {
         </div>
 
         {/* Filter Pills */}
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {[
             { id: 'all', label: `All Orders (${orders.length})` },
-            { id: 'qr', label: `📱 Table QR (${orders.filter(o => o.order_source === 'qr_guest').length})` },
-            { id: 'dine-in', label: `Dine-in (${orders.filter(o => o.order_type === 'dine-in' && o.order_source !== 'qr_guest').length})` },
-            { id: 'takeaway', label: `Takeaway (${orders.filter(o => o.order_type === 'takeaway').length})` },
+            { id: 'qr', label: `📱 Table QR (${orders.filter((o) => o.order_source === 'qr_guest').length})` },
+            {
+              id: 'counter',
+              label: `💵 Pay at Counter (${orders.filter((o) => !(o.payment_status === 'paid' || o.payment_preference === 'pay_here')).length})`,
+            },
+            {
+              id: 'paid_online',
+              label: `🟢 Paid Online (${orders.filter((o) => o.payment_status === 'paid' || o.payment_preference === 'pay_here').length})`,
+            },
+            {
+              id: 'dine-in',
+              label: `Dine-in (${orders.filter((o) => o.order_type === 'dine-in' && o.order_source !== 'qr_guest').length})`,
+            },
+            { id: 'takeaway', label: `Takeaway (${orders.filter((o) => o.order_type === 'takeaway').length})` },
           ].map((flt) => (
             <button
               key={flt.id}
@@ -731,7 +785,7 @@ export default function Orders() {
               <tbody>
                 {displayOrders.map((order) => {
                   const isQr = order.order_source === 'qr_guest';
-                  const isPaidOnline = order.payment_status === 'paid' || order.payment_method === 'upi';
+                  const isPaidOnline = order.payment_status === 'paid' || order.payment_preference === 'pay_here';
                   const billRequested = order.notes?.includes('GUEST REQUESTED BILL');
 
                   return (
@@ -833,19 +887,20 @@ export default function Orders() {
                       <td style={{ padding: '14px 16px' }}>
                         <span
                           style={{
-                            fontSize: '0.72rem',
+                            fontSize: '0.74rem',
                             fontWeight: 800,
-                            padding: '3px 8px',
+                            padding: '4px 10px',
                             borderRadius: 12,
                             background: isPaidOnline ? '#dcfce7' : '#fffbeb',
-                            color: isPaidOnline ? '#15803d' : '#b45309',
-                            border: `1px solid ${isPaidOnline ? '#bbf7d0' : '#fef08a'}`,
+                            color: isPaidOnline ? '#15803d' : '#92400e',
+                            border: `1.5px solid ${isPaidOnline ? '#86efac' : '#fde047'}`,
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: 4,
+                            gap: 5,
+                            boxShadow: isPaidOnline ? '0 1px 4px rgba(22, 163, 74, 0.15)' : '0 1px 4px rgba(217, 119, 6, 0.15)',
                           }}
                         >
-                          {isPaidOnline ? 'Paid (UPI) ✓' : 'Pay at Counter'}
+                          {isPaidOnline ? '🟢 Paid Online (UPI) ✓' : '💵 Pay at Counter'}
                         </span>
                       </td>
 

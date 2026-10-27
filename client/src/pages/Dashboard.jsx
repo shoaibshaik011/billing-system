@@ -12,22 +12,28 @@ const EMPIRE_CHART_COLORS = ['#e11d24', '#f59e0b', '#16a34a', '#0284c7', '#7c3ae
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadDashboard();
-    const interval = setInterval(loadDashboard, 30000);
+    loadDashboard(true);
+    const interval = setInterval(() => {
+      loadDashboard(false);
+    }, 3000); // 3-second live auto-refresh
     return () => clearInterval(interval);
   }, []);
 
-  async function loadDashboard() {
+  async function loadDashboard(isInitial = false) {
     try {
+      if (isInitial) setLoading(true);
+      else setRefreshing(true);
       const result = await api.getDashboard();
       setData(result);
     } catch (err) {
       console.error('Dashboard load failed:', err);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
+      setRefreshing(false);
     }
   }
 
@@ -86,7 +92,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Filter Row like Empire screenshot */}
+      {/* Filter Row with Live Auto-Refresh Status */}
       <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="filter-chip active">Dine In</span>
@@ -96,8 +102,19 @@ export default function Dashboard() {
           <span className="filter-chip">Open Now</span>
           <span className="filter-chip">Direct Pay</span>
         </div>
-        <div className="text-xs text-muted font-semibold">
-          Active Outlets: <strong>1 (Jayanagar Flagship)</strong>
+        <div className="flex items-center gap-3">
+          <span className="badge-open" style={{ background: '#ecfdf5', color: '#15803d', border: '1px solid #bbf7d0', padding: '3px 10px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
+            Live Polling (3s)
+          </span>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => loadDashboard(false)}
+            disabled={refreshing}
+            style={{ fontSize: '0.75rem', padding: '3px 10px' }}
+          >
+            {refreshing ? '↻ Refreshing...' : '↻ Refresh'}
+          </button>
         </div>
       </div>
 
@@ -110,7 +127,9 @@ export default function Dashboard() {
           <div>
             <span className="stat-card-title">Today's Revenue</span>
             <div className="stat-card-value text-primary">₹{(today?.total_revenue || 0).toLocaleString('en-IN')}</div>
-            <span className="text-xs text-muted">Settled dining & takeaways</span>
+            <span className="text-xs text-muted">
+              ₹{(today?.settled_revenue || 0).toLocaleString('en-IN')} settled • ₹{(today?.active_revenue || 0).toLocaleString('en-IN')} dining
+            </span>
           </div>
         </div>
 
@@ -121,7 +140,9 @@ export default function Dashboard() {
           <div>
             <span className="stat-card-title">Total Orders</span>
             <div className="stat-card-value">{today?.total_orders || 0}</div>
-            <span className="text-xs text-muted">{today?.active_orders || 0} currently active</span>
+            <span className="text-xs text-muted">
+              {today?.active_orders || 0} active • {today?.completed_orders || 0} settled
+            </span>
           </div>
         </div>
 
@@ -132,7 +153,7 @@ export default function Dashboard() {
           <div>
             <span className="stat-card-title">Avg Order Value</span>
             <div className="stat-card-value">₹{Math.round(today?.avg_order_value || 0).toLocaleString('en-IN')}</div>
-            <span className="text-xs text-muted">Per bill average</span>
+            <span className="text-xs text-muted">Per active bill average</span>
           </div>
         </div>
 
@@ -287,6 +308,116 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Live Floor & Counter Activity */}
+      {data?.recentOrders && data.recentOrders.length > 0 && (
+        <div className="card mt-6">
+          <div className="card-header flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h3 style={{ margin: 0 }}>🔴 Live Floor & Counter Orders</h3>
+              <span className="badge badge-open" style={{ fontSize: '0.72rem' }}>Real-time</span>
+            </div>
+            <button className="btn btn-primary btn-sm" onClick={() => navigate('/orders')}>
+              View All in POS & Orders ↗
+            </button>
+          </div>
+          <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+            <table className="data-table" style={{ width: '100%' }}>
+              <thead>
+                <tr style={{ background: '#f8fafc' }}>
+                  <th style={{ padding: '10px 16px', textAlign: 'left' }}>Order #</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'left' }}>Table / Channel</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'left' }}>Guest Info</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'left' }}>Bill Amount</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'left' }}>Payment Preference</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'left' }}>Status</th>
+                  <th style={{ padding: '10px 16px', textAlign: 'right' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.recentOrders.map((ord) => {
+                  const isOnline = ord.payment_status === 'paid' || ord.payment_preference === 'pay_here';
+                  return (
+                    <tr
+                      key={ord.id}
+                      style={{ cursor: 'pointer', borderBottom: '1px solid var(--border-primary)' }}
+                      onClick={() => navigate(`/orders?order_id=${ord.id}`)}
+                    >
+                      <td style={{ padding: '12px 16px', fontWeight: 700 }}>{ord.order_number}</td>
+                      <td style={{ padding: '12px 16px' }}>
+                        {ord.order_source === 'qr_guest' ? (
+                          <span
+                            style={{
+                              background: 'var(--empire-red-tint)',
+                              color: 'var(--empire-red)',
+                              border: '1px solid var(--empire-red-border)',
+                              fontSize: '0.72rem',
+                              fontWeight: 800,
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                            }}
+                          >
+                            📱 Table {ord.table_number || 'QR'}
+                          </span>
+                        ) : (
+                          <span className="badge badge-info">{ord.table_number ? `Table ${ord.table_number}` : 'Counter'}</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '12px 16px', fontSize: '0.82rem' }}>{ord.guest_name || 'Walk-in Guest'}</td>
+                      <td style={{ padding: '12px 16px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        ₹{(ord.total_amount || 0).toLocaleString('en-IN')}
+                      </td>
+                      <td style={{ padding: '12px 16px' }}>
+                        <span
+                          style={{
+                            fontSize: '0.74rem',
+                            fontWeight: 800,
+                            padding: '3px 10px',
+                            borderRadius: 12,
+                            background: isOnline ? '#dcfce7' : '#fffbeb',
+                            color: isOnline ? '#15803d' : '#b45309',
+                            border: `1.5px solid ${isOnline ? '#86efac' : '#fde047'}`,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          {isOnline ? '🟢 Paid Online (UPI) ✓' : '💵 Pay at Counter'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 16px' }}>
+                        <span
+                          className={`badge ${
+                            ord.status === 'completed'
+                              ? 'badge-success'
+                              : ord.status === 'active'
+                              ? 'badge-open'
+                              : 'badge-danger'
+                          }`}
+                        >
+                          {ord.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/orders?order_id=${ord.id}`);
+                          }}
+                        >
+                          Open in POS ↗
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
