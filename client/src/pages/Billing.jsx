@@ -211,7 +211,7 @@ export default function Billing() {
             style={{ maxWidth: 450, padding: '24px' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 no-print">
               <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Tax Invoice Receipt</h3>
               <div className="flex items-center gap-2">
                 <button className="btn btn-secondary btn-sm" onClick={handlePrint}>
@@ -276,7 +276,7 @@ export default function Billing() {
                     <tr key={item.id} style={{ borderBottom: '1px dotted #e5e7eb' }}>
                       <td style={{ padding: '4px 0' }}>{item.item_name}</td>
                       <td style={{ textAlign: 'center', padding: '4px 0' }}>{item.quantity}</td>
-                      <td style={{ textAlign: 'right', padding: '4px 0' }}>₹{item.unit_price}</td>
+                      <td style={{ textAlign: 'right', padding: '4px 0' }}>₹{(item.item_price ?? item.unit_price ?? (item.total_price / (item.quantity || 1)))}</td>
                       <td style={{ textAlign: 'right', padding: '4px 0' }}>₹{item.total_price}</td>
                     </tr>
                   ))}

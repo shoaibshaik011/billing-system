@@ -1526,27 +1526,62 @@ a:hover {
 
 /* Thermal 80mm Receipt Print Styles */
 @media print {
-  body * {
-    visibility: hidden !important;
+  @page {
+    margin: 4mm;
+    size: auto;
   }
-  .receipt-preview, .receipt-preview * {
-    visibility: visible !important;
+
+  html, body {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
-  .receipt-preview {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 80mm !important;
-    max-width: 100% !important;
+
+  /* Hide everything outside receipt */
+  .sidebar,
+  .header,
+  .no-print,
+  .btn,
+  .tabs,
+  .modal-header,
+  .modal-footer,
+  .page-content > *:not(.modal-overlay) {
+    display: none !important;
+  }
+
+  /* Unset modal backdrop and borders for paper */
+  .modal-overlay {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    display: block !important;
+  }
+
+  .modal-card {
+    position: static !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
     margin: 0 auto !important;
-    padding: 8px !important;
+    max-width: 80mm !important;
+    width: 100% !important;
+  }
+
+  .receipt-preview {
     border: none !important;
     box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    max-width: 80mm !important;
     background: #ffffff !important;
     color: #000000 !important;
-  }
-  .no-print, .modal-overlay, .sidebar, .header, .btn, .tabs, .page-content {
-    display: none !important;
+    font-size: 12px !important;
+    line-height: 1.35 !important;
   }
 }
 
