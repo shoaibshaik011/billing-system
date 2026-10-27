@@ -203,10 +203,12 @@ export default function GuestOrder() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2.5rem', animation: 'spin 1.5s infinite linear' }}>🍽️</div>
-          <p style={{ marginTop: 12, fontWeight: 700, color: 'var(--empire-red)' }}>Loading Table Menu...</p>
+      <div className="guest-order-wrapper">
+        <div className="guest-order-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '2.5rem', animation: 'spin 1.5s infinite linear' }}>🍽️</div>
+            <p style={{ marginTop: 12, fontWeight: 700, color: 'var(--empire-red)' }}>Loading Table Menu...</p>
+          </div>
         </div>
       </div>
     );
@@ -214,12 +216,14 @@ export default function GuestOrder() {
 
   if (error || !data) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: '#f8fafc' }}>
-        <div className="card text-center p-6" style={{ maxWidth: 400 }}>
-          <AlertCircle size={48} className="text-danger" style={{ margin: '0 auto 12px' }} />
-          <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>Table Not Found</h2>
-          <p className="text-sm text-muted mb-4">{error || 'Please ask your server for assistance or scan the table QR again.'}</p>
-          <a href="/table/T1" className="btn btn-primary btn-sm">Try Demo Table T1</a>
+      <div className="guest-order-wrapper">
+        <div className="guest-order-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div className="card text-center p-6" style={{ maxWidth: 400, width: '100%' }}>
+            <AlertCircle size={48} className="text-danger" style={{ margin: '0 auto 12px' }} />
+            <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>Table Not Found</h2>
+            <p className="text-sm text-muted mb-4">{error || 'Please ask your server for assistance or scan the table QR again.'}</p>
+            <a href="/table/T1" className="btn btn-primary btn-sm">Try Demo Table T1</a>
+          </div>
         </div>
       </div>
     );
@@ -244,18 +248,20 @@ export default function GuestOrder() {
   const isPaid = activeOrder?.payment_status === 'paid' || activeOrder?.payment_preference === 'pay_here';
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', paddingBottom: cartItemCount > 0 ? 90 : 30 }}>
-      {/* Mobile Top Header Banner */}
-      <header
-        style={{
-          background: 'linear-gradient(135deg, var(--empire-red) 0%, #991b1b 100%)',
-          color: '#ffffff',
-          padding: '20px 20px 24px',
-          borderBottomLeftRadius: 24,
-          borderBottomRightRadius: 24,
-          boxShadow: '0 8px 24px rgba(225, 29, 36, 0.25)',
-        }}
-      >
+    <div className="guest-order-wrapper">
+      <div className="guest-order-container" style={{ paddingBottom: cartItemCount > 0 ? 100 : 36 }}>
+        {/* Mobile Top Header Banner */}
+        <header
+          className="guest-order-header"
+          style={{
+            background: 'linear-gradient(135deg, var(--empire-red) 0%, #991b1b 100%)',
+            color: '#ffffff',
+            padding: '20px 20px 24px',
+            borderBottomLeftRadius: 24,
+            borderBottomRightRadius: 24,
+            boxShadow: '0 8px 24px rgba(225, 29, 36, 0.25)',
+          }}
+        >
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <span style={{ fontSize: '1.6rem' }}>{tenant?.icon_emoji || settings?.icon_emoji || '🍽️'}</span>
@@ -515,7 +521,7 @@ export default function GuestOrder() {
 
         <div className="flex items-center justify-between gap-2">
           {/* Horizontal category slider */}
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, flex: 1 }}>
+          <div className="guest-category-scroll" style={{ flex: 1 }}>
             <button
               className={`category-chip ${selectedCategory === 'all' ? 'active' : ''}`}
               onClick={() => setSelectedCategory('all')}
@@ -622,20 +628,7 @@ export default function GuestOrder() {
 
       {/* Floating View Cart Sticky Bar */}
       {cartItemCount > 0 && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            padding: '12px 16px',
-            background: 'rgba(255,255,255,0.95)',
-            backdropFilter: 'blur(10px)',
-            borderTop: '1px solid var(--border-primary)',
-            boxShadow: '0 -4px 20px rgba(0,0,0,0.08)',
-            zIndex: 100,
-          }}
-        >
+        <div className="guest-floating-cart-bar">
           <button
             onClick={() => setShowCart(true)}
             className="btn btn-primary"
@@ -1084,6 +1077,7 @@ export default function GuestOrder() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

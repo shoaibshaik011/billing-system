@@ -102,6 +102,7 @@
 html {
   font-size: 14px;
   scroll-behavior: smooth;
+  min-height: 100%;
 }
 
 body {
@@ -111,12 +112,17 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow: hidden;
+  min-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 #root {
-  height: 100vh;
+  min-height: 100vh;
+  width: 100%;
   display: flex;
+  flex-direction: column;
 }
 
 a {
@@ -141,6 +147,7 @@ a:hover {
   display: flex;
   width: 100%;
   height: 100vh;
+  overflow: hidden;
   background: var(--bg-primary);
 }
 
@@ -1587,5 +1594,91 @@ a:hover {
     line-height: 1.35 !important;
   }
 }
+
+/* ==========================================================================
+   Mobile-Optimized Guest Table Ordering Experience
+   ========================================================================== */
+.guest-order-wrapper {
+  width: 100%;
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  background: #0f172a10;
+  display: flex;
+  justify-content: center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.guest-order-container {
+  width: 100%;
+  max-width: 560px;
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  background: #f8fafc;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.guest-order-header {
+  padding-top: max(20px, env(safe-area-inset-top, 20px));
+}
+
+.guest-category-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.guest-category-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.guest-floating-cart-bar {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 560px;
+  padding: 12px 16px max(14px, env(safe-area-inset-bottom, 14px));
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--border-primary);
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+@media (max-width: 640px) {
+  .guest-order-wrapper {
+    background: #f8fafc;
+  }
+  .guest-order-container {
+    box-shadow: none;
+    max-width: 100%;
+  }
+  .guest-floating-cart-bar {
+    max-width: 100%;
+  }
+  .modal-overlay {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .modal-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    max-height: 92vh !important;
+  }
+}
+
 
 
