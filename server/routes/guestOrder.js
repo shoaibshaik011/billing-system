@@ -3,13 +3,42 @@ const { getDb } = require('../database');
 
 const router = express.Router();
 
+// Helper to flexibly find table by 'T1', '1', 't1', 'table-1', etc.
+function findTable(db, tableParam) {
+  if (!tableParam) return db.prepare('SELECT * FROM tables ORDER BY id ASC LIMIT 1').get();
+  const raw = tableParam.toString().trim();
+  const lower = raw.toLowerCase();
+  const numOnly = lower.replace(/[^0-9]/g, '');
+
+  // 1. Exact or case-insensitive match
+  let table = db.prepare('SELECT * FROM tables WHERE LOWER(table_number) = ?').get(lower);
+  if (table) return table;
+
+  // 2. Try 'T' + param (e.g. '1' -> 'T1')
+  table = db.prepare('SELECT * FROM tables WHERE LOWER(table_number) = ?').get(`t${lower}`);
+  if (table) return table;
+
+  // 3. Try number-only match ('T' + numOnly or exact numOnly)
+  if (numOnly) {
+    table = db.prepare('SELECT * FROM tables WHERE LOWER(table_number) = ? OR LOWER(table_number) = ?').get(`t${numOnly}`, numOnly);
+    if (table) return table;
+
+    // Try matching by table id
+    table = db.prepare('SELECT * FROM tables WHERE id = ?').get(parseInt(numOnly, 10));
+    if (table) return table;
+  }
+
+  // 4. Fallback to first available table
+  return db.prepare('SELECT * FROM tables ORDER BY id ASC LIMIT 1').get();
+}
+
 // GET table menu & active status for QR ordering
 router.get('/table/:tableNumber', (req, res) => {
   const db = getDb();
   const { tableNumber } = req.params;
 
-  // Find table
-  const table = db.prepare('SELECT * FROM tables WHERE LOWER(table_number) = LOWER(?)').get(tableNumber);
+  // Find table flexibly
+  const table = findTable(db, tableNumber);
   if (!table) {
     return res.status(404).json({ error: 'Table not found. Please verify the QR code.' });
   }
@@ -66,7 +95,7 @@ router.post('/table/:tableNumber/order', (req, res) => {
     return res.status(400).json({ error: 'No items in order' });
   }
 
-  const table = db.prepare('SELECT * FROM tables WHERE LOWER(table_number) = LOWER(?)').get(tableNumber);
+  const table = findTable(db, tableNumber);
   if (!table) {
     return res.status(404).json({ error: 'Table not found' });
   }
