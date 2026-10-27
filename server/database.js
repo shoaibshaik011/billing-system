@@ -308,6 +308,38 @@ function initializeDatabase() {
         'Malleshwaram 8th Cross, Bengaluru'
       );
     }
+
+    // Staff & Users Table for Restaurant POS and SaaS Vendor
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        email TEXT DEFAULT '',
+        password TEXT NOT NULL,
+        pin TEXT DEFAULT '1234',
+        role TEXT DEFAULT 'cashier' CHECK(role IN ('admin', 'manager', 'cashier', 'waiter', 'superadmin')),
+        tenant_slug TEXT DEFAULT '',
+        avatar TEXT DEFAULT '👨‍🍳',
+        is_active INTEGER DEFAULT 1,
+        last_login TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
+
+    // Seed default users if empty
+    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
+    if (userCount.count === 0) {
+      const insertUser = db.prepare(`
+        INSERT INTO users (username, name, email, password, pin, role, avatar)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      insertUser.run('admin', 'Empire Admin', 'admin@empire.com', 'admin123', '9999', 'admin', '👑');
+      insertUser.run('cashier', 'Counter Cashier', 'cashier@empire.com', 'cashier123', '1234', 'cashier', '💼');
+      insertUser.run('vendor', 'SaaS Software Vendor', 'vendor@billflow.com', 'vendor123', '0000', 'superadmin', '⚡');
+    }
   } catch (err) {
     console.error('Migration warning:', err.message);
   }

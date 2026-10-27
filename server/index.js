@@ -12,6 +12,7 @@ const analyticsRouter = require('./routes/analytics');
 const guestOrderRouter = require('./routes/guestOrder');
 const subscriptionRouter = require('./routes/subscription');
 const superAdminRouter = require('./routes/superAdmin');
+const authRouter = require('./routes/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -21,6 +22,7 @@ app.use(cors());
 app.use(express.json());
 
 // API Routes
+app.use('/api/auth', authRouter);
 app.use('/api/admin', superAdminRouter);
 app.use('/api/categories', categoriesRouter);
 app.use('/api/menu-items', menuItemsRouter);

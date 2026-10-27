@@ -5,6 +5,7 @@ import * as api from '../api';
 
 import Sidebar from './Sidebar';
 import Header from './Header';
+import ProtectedRoute from './ProtectedRoute';
 
 import Dashboard from '../pages/Dashboard';
 import Tables from '../pages/Tables';
@@ -16,6 +17,7 @@ import Billing from '../pages/Billing';
 import QrCodes from '../pages/QrCodes';
 import Subscription from '../pages/Subscription';
 import Settings from '../pages/Settings';
+import Login from '../pages/Login';
 
 export default function TenantLayout() {
   const { slug } = useParams();
@@ -144,26 +146,39 @@ export default function TenantLayout() {
     );
   }
 
-  // Active software instance
+  // Active software instance routes
   return (
-    <div className="app-layout">
-      <Sidebar tenant={tenant} basePath={`/r/${slug}`} />
-      <div className="main-content">
-        <Header tenant={tenant} />
-        <Routes>
-          <Route path="/" element={<Dashboard tenant={tenant} />} />
-          <Route path="/tables" element={<Tables tenant={tenant} />} />
-          <Route path="/orders" element={<Orders tenant={tenant} />} />
-          <Route path="/kitchen" element={<Kitchen tenant={tenant} />} />
-          <Route path="/qr-codes" element={<QrCodes tenant={tenant} />} />
-          <Route path="/menu" element={<Menu tenant={tenant} />} />
-          <Route path="/customers" element={<Customers tenant={tenant} />} />
-          <Route path="/billing" element={<Billing tenant={tenant} />} />
-          <Route path="/subscription" element={<Subscription tenant={tenant} />} />
-          <Route path="/settings" element={<Settings tenant={tenant} />} />
-          <Route path="*" element={<Navigate to={`/r/${slug}`} replace />} />
-        </Routes>
-      </div>
-    </div>
+    <Routes>
+      {/* Tenant-branded Login route */}
+      <Route path="/login" element={<Login tenant={tenant} />} />
+
+      {/* Protected Operations routes */}
+      <Route
+        path="/*"
+        element={
+          <ProtectedRoute>
+            <div className="app-layout">
+              <Sidebar tenant={tenant} basePath={`/r/${slug}`} />
+              <div className="main-content">
+                <Header tenant={tenant} />
+                <Routes>
+                  <Route path="/" element={<Dashboard tenant={tenant} />} />
+                  <Route path="/tables" element={<Tables tenant={tenant} />} />
+                  <Route path="/orders" element={<Orders tenant={tenant} />} />
+                  <Route path="/kitchen" element={<Kitchen tenant={tenant} />} />
+                  <Route path="/qr-codes" element={<QrCodes tenant={tenant} />} />
+                  <Route path="/menu" element={<Menu tenant={tenant} />} />
+                  <Route path="/customers" element={<Customers tenant={tenant} />} />
+                  <Route path="/billing" element={<Billing tenant={tenant} />} />
+                  <Route path="/subscription" element={<Subscription tenant={tenant} />} />
+                  <Route path="/settings" element={<Settings tenant={tenant} />} />
+                  <Route path="*" element={<Navigate to={`/r/${slug}`} replace />} />
+                </Routes>
+              </div>
+            </div>
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   );
 }

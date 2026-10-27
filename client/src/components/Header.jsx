@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Clock, Search, ShoppingBag, Mic, User, Compass, ShoppingCart } from 'lucide-react';
+import { Clock, Search, ShoppingBag, Mic, User, LogOut, ShoppingCart, ShieldCheck } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
 import * as api from '../api';
 
 const pageTitles = {
@@ -14,12 +16,21 @@ const pageTitles = {
   '/billing': { title: 'Billing & Invoices', subtitle: 'Tax Invoices & Daily Settlement' },
   '/subscription': { title: 'Software Subscription & SaaS Licensing', subtitle: 'Commercial Plans, License Keys & Reseller MRR' },
   '/settings': { title: 'Outlet Settings', subtitle: 'Empire Branch Profile & GST' },
+  '/admin': { title: 'SaaS Vendor Command Hub', subtitle: 'White-Label Client Customizer & WhatsApp Dispatcher' },
 };
 
-export default function Header() {
+export default function Header({ tenant }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const page = pageTitles[location.pathname] || { title: 'Empire POS', subtitle: '' };
+  const { user, logout, isAuthenticated } = useAuth();
+
+  // Handle route matching for titles
+  const cleanPath = location.pathname.replace(/^\/r\/[^/]+/, '') || '/';
+  const page = pageTitles[cleanPath] || {
+    title: tenant?.name ? `${tenant.name} POS` : 'Restaurant POS',
+    subtitle: 'Terminal Operations',
+  };
+
   const [time, setTime] = useState(new Date());
   const [activeOrdersCount, setActiveOrdersCount] = useState(0);
 
@@ -43,6 +54,13 @@ export default function Header() {
     }
   }
 
+  const handleLogout = () => {
+    logout();
+    toast.success('Terminal locked successfully');
+    const slug = location.pathname.match(/^\/r\/([^/]+)/)?.[1];
+    navigate(slug ? `/r/${slug}/login` : '/login');
+  };
+
   return (
     <header className="header">
       <div className="header-left">
@@ -53,28 +71,17 @@ export default function Header() {
       </div>
 
       <div className="header-right">
-        {/* Quick Search Pill like Empire website */}
-        <div className="search-bar" style={{ minWidth: 280 }}>
+        {/* Quick Search Pill */}
+        <div className="search-bar" style={{ minWidth: 240 }}>
           <Search size={16} className="text-muted" />
           <input
             type="text"
-            placeholder="Search items, KOT, tables..."
+            placeholder="Search dishes, bills, tables..."
             onKeyDown={(e) => {
               if (e.key === 'Enter') navigate('/orders');
             }}
           />
           <Mic size={16} style={{ color: 'var(--empire-red)', cursor: 'pointer' }} />
-        </div>
-
-        {/* Live Status Pill */}
-        <div
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-          style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', fontSize: '0.78rem' }}
-        >
-          <span className="badge-open" style={{ padding: 0, border: 'none' }}>
-            Open
-          </span>
-          <span style={{ color: '#15803d', fontWeight: 600 }}>11:00 AM – 1:00 AM</span>
         </div>
 
         {/* Live Clock */}
@@ -85,14 +92,14 @@ export default function Header() {
           </span>
         </div>
 
-        {/* Empire Cart / Active Orders Red Button */}
+        {/* Active Orders Quick Button */}
         <button
           className="btn btn-primary"
           style={{ borderRadius: 'var(--radius-full)', padding: '7px 16px' }}
           onClick={() => navigate('/orders')}
         >
           <ShoppingCart size={16} />
-          <span>Active Orders</span>
+          <span>Active</span>
           {activeOrdersCount > 0 && (
             <span
               style={{
@@ -113,6 +120,66 @@ export default function Header() {
             </span>
           )}
         </button>
+
+        {/* Staff Profile & Lock/Logout Button */}
+        {isAuthenticated && user ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '4px 6px 4px 12px',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border-primary)',
+              borderRadius: '30px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '1.2rem' }}>{user.avatar || '👨‍🍳'}</span>
+              <div style={{ textAlign: 'left', lineHeight: 1.1 }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {user.name}
+                </div>
+                <span
+                  style={{
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    color: user.role === 'admin' ? '#e11d24' : user.role === 'superadmin' ? '#7c3aed' : '#16a34a',
+                  }}
+                >
+                  {user.role}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              className="btn btn-outline"
+              title="Lock Terminal / Sign Out"
+              style={{
+                width: '32px',
+                height: '32px',
+                padding: 0,
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: '#ffffff',
+              }}
+            >
+              <LogOut size={14} color="#ef4444" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => navigate('/login')}
+            className="btn btn-outline"
+            style={{ fontSize: '0.82rem', fontWeight: 700 }}
+          >
+            Sign In
+          </button>
+        )}
       </div>
     </header>
   );

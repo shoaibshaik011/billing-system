@@ -100,3 +100,10 @@ export const renewTenantSubscription = (id, days = 30) => request(`/admin/tenant
 export const toggleTenantStatus = (id, status) => request(`/admin/tenants/${id}/status`, { method: 'PATCH', body: { status } });
 export const deleteTenant = (id) => request(`/admin/tenants/${id}`, { method: 'DELETE' });
 
+// Staff & User Authentication
+export const login = (data) => request('/auth/login', { method: 'POST', body: data });
+export const getUsers = () => request('/auth/users');
+export const createUser = (data) => request('/auth/users', { method: 'POST', body: data });
+export const updateUser = (id, data) => request(`/auth/users/${id}`, { method: 'PUT', body: data });
+export const deleteUser = (id) => request(`/auth/users/${id}`, { method: 'DELETE' });
+
