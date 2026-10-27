@@ -56,6 +56,8 @@ export default function Tables() {
       navigate(`/orders?new=1&table_id=${table.id}&table_number=${table.table_number}`);
     } else if (table.active_order_id) {
       navigate(`/orders?order_id=${table.active_order_id}`);
+    } else {
+      navigate('/orders');
     }
   }
 

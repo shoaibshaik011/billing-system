@@ -206,6 +206,9 @@ function initializeDatabase() {
     if (!orderCols.includes('special_instructions')) {
       db.exec("ALTER TABLE orders ADD COLUMN special_instructions TEXT DEFAULT '';");
     }
+    if (!orderCols.includes('payment_preference')) {
+      db.exec("ALTER TABLE orders ADD COLUMN payment_preference TEXT DEFAULT 'counter';");
+    }
 
     const settingsCols = db.pragma('table_info(settings)').map(c => c.name);
     if (!settingsCols.includes('primary_color')) {
@@ -219,6 +222,9 @@ function initializeDatabase() {
     }
     if (!settingsCols.includes('since_year')) {
       db.exec("ALTER TABLE settings ADD COLUMN since_year TEXT DEFAULT '1966';");
+    }
+    if (!settingsCols.includes('upi_id')) {
+      db.exec("ALTER TABLE settings ADD COLUMN upi_id TEXT DEFAULT 'empire.billing@upi';");
     }
 
     // Master Multi-Tenant Restaurants Table

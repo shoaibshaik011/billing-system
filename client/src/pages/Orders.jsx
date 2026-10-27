@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Search, Plus, Minus, Trash2, X, CreditCard, Banknote, Smartphone, Percent, Receipt, ArrowLeft } from 'lucide-react';
+import {
+  Search, Plus, Minus, Trash2, X, CreditCard, Banknote, Smartphone,
+  Percent, Receipt, ArrowLeft, RefreshCw, QrCode, Bell, User, Clock, Check
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import * as api from '../api';
 
@@ -23,11 +26,16 @@ export default function Orders() {
 
   // List view states
   const [orders, setOrders] = useState([]);
-  const [viewMode, setViewMode] = useState('pos'); // 'pos' or 'list'
-  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'pos'
+  const [orderFilter, setOrderFilter] = useState('all'); // 'all', 'qr', 'dine-in', 'takeaway'
 
+  // Initial data load and 3-second live polling
   useEffect(() => {
     loadData();
+    const interval = setInterval(() => {
+      api.getOrders({ status: 'active' }).then(setOrders).catch(() => {});
+    }, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -36,9 +44,9 @@ export default function Orders() {
     const orderId = searchParams.get('order_id');
 
     if (newOrder && tableId) {
-      createNewOrder(parseInt(tableId));
+      createNewOrder(parseInt(tableId, 10));
     } else if (orderId) {
-      loadExistingOrder(parseInt(orderId));
+      loadExistingOrder(parseInt(orderId, 10));
     }
   }, [searchParams]);
 
@@ -101,7 +109,7 @@ export default function Orders() {
   const filteredItems = useMemo(() => {
     let items = menuItems;
     if (activeCategory !== 'all') {
-      items = items.filter((i) => i.category_id === parseInt(activeCategory));
+      items = items.filter((i) => i.category_id === parseInt(activeCategory, 10));
     }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -188,7 +196,7 @@ export default function Orders() {
     if (!currentOrder) return;
     try {
       await api.completeOrder(currentOrder.id, { payment_method: method });
-      toast.success(`Payment received via ${method}! 🎉`);
+      toast.success(`Payment received via ${method.toUpperCase()}! 🎉`);
       setCurrentOrder(null);
       setCartItems([]);
       setShowPayment(false);
@@ -226,32 +234,112 @@ export default function Orders() {
     : 0;
   const total = subtotal + tax + serviceCharge - discount;
 
+  // Filtered orders list for list view
+  const displayOrders = orders.filter((o) => {
+    if (orderFilter === 'qr') return o.order_source === 'qr_guest';
+    if (orderFilter === 'dine-in') return o.order_type === 'dine-in' && o.order_source !== 'qr_guest';
+    if (orderFilter === 'takeaway') return o.order_type === 'takeaway';
+    return true;
+  });
+
   // POS mode
   if (viewMode === 'pos' && currentOrder) {
+    const isQrOrder = currentOrder.order_source === 'qr_guest';
+    const isPaidOnline = currentOrder.payment_status === 'paid' || currentOrder.payment_method === 'upi';
+
     return (
       <div className="pos-layout">
         {/* Menu Side */}
         <div className="pos-menu">
+          {/* Incoming QR Order Alert Banner in POS Mode */}
+          {orders.some((o) => o.order_source === 'qr_guest' && o.id !== currentOrder?.id) && (
+            <div
+              style={{
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: 8,
+                padding: '8px 12px',
+                marginBottom: 10,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '0.8rem',
+                color: '#991b1b',
+                fontWeight: 700,
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <span>🔔</span>
+                <span>
+                  {orders.filter((o) => o.order_source === 'qr_guest' && o.id !== currentOrder?.id).length} Table QR
+                  Order(s) Waiting in Queue!
+                </span>
+              </div>
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={() => {
+                  setCurrentOrder(null);
+                  setCartItems([]);
+                  setViewMode('list');
+                }}
+                style={{ fontSize: '0.74rem', padding: '3px 10px' }}
+              >
+                View Orders Queue ↗
+              </button>
+            </div>
+          )}
+
           <div className="pos-menu-header">
-            <button className="btn btn-ghost btn-sm" onClick={() => { setCurrentOrder(null); setCartItems([]); setViewMode('list'); }}>
-              <ArrowLeft size={16} /> Back
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setCurrentOrder(null);
+                setCartItems([]);
+                setViewMode('list');
+              }}
+              style={{ fontWeight: 700, gap: 6 }}
+            >
+              <ArrowLeft size={16} /> All Active Orders ({orders.length})
+              {orders.some((o) => o.order_source === 'qr_guest') && (
+                <span
+                  style={{
+                    background: 'var(--empire-red)',
+                    color: '#ffffff',
+                    fontSize: '0.68rem',
+                    fontWeight: 800,
+                    padding: '2px 6px',
+                    borderRadius: 10,
+                  }}
+                >
+                  📱 {orders.filter((o) => o.order_source === 'qr_guest').length} QR
+                </span>
+              )}
             </button>
             <div style={{ flex: 1 }}>
               <div className="search-bar">
                 <Search className="search-icon" size={18} />
-                <input placeholder="Search menu items..." value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)} />
+                <input
+                  placeholder="Search menu items..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
               </div>
             </div>
           </div>
 
           <div className="pos-categories">
-            <button className={`category-chip ${activeCategory === 'all' ? 'active' : ''}`}
-              onClick={() => setActiveCategory('all')}>All</button>
+            <button
+              className={`category-chip ${activeCategory === 'all' ? 'active' : ''}`}
+              onClick={() => setActiveCategory('all')}
+            >
+              All
+            </button>
             {categories.filter((c) => c.is_active).map((cat) => (
-              <button key={cat.id}
+              <button
+                key={cat.id}
                 className={`category-chip ${activeCategory === String(cat.id) ? 'active' : ''}`}
-                onClick={() => setActiveCategory(String(cat.id))}>
+                onClick={() => setActiveCategory(String(cat.id))}
+              >
                 {cat.icon} {cat.name}
               </button>
             ))}
@@ -259,40 +347,103 @@ export default function Orders() {
 
           <div className="pos-items-grid">
             {filteredItems.map((item) => (
-              <div key={item.id} className={`menu-item-card ${!item.is_available ? 'unavailable' : ''}`}
-                onClick={() => item.is_available && addToCart(item)}>
+              <div
+                key={item.id}
+                className={`menu-item-card ${!item.is_available ? 'unavailable' : ''}`}
+                onClick={() => item.is_available && addToCart(item)}
+              >
                 <div className="item-top">
                   <div className="flex items-center gap-2">
                     <span className={`veg-indicator ${item.is_veg ? 'veg' : 'non-veg'}`} />
                     <span className="item-name">{item.name}</span>
                   </div>
                 </div>
-                <div className="item-price">₹{item.price}</div>
-                {item.description && <div className="item-desc">{item.description}</div>}
+                <div className="item-bottom">
+                  <span className="item-price">₹{item.price}</span>
+                  <span className="item-prep">⏱ {item.preparation_time}m</span>
+                </div>
               </div>
             ))}
-            {filteredItems.length === 0 && (
-              <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
-                <div className="empty-icon">🔍</div>
-                <h3>No items found</h3>
-                <p>Try a different search or category</p>
-              </div>
-            )}
           </div>
         </div>
 
         {/* Cart Side */}
         <div className="pos-cart">
-          <div className="pos-cart-header">
-            <h3>
-              🧾 {currentOrder.order_number}
-              {currentOrder.table_number && (
-                <span className="badge badge-info" style={{ marginLeft: 8 }}>
-                  {currentOrder.table_number}
-                </span>
-              )}
-            </h3>
-            <span className="badge badge-purple">{currentOrder.order_type}</span>
+          {/* Order Header Banner */}
+          <div
+            className="cart-header"
+            style={{
+              padding: '12px 16px',
+              borderBottom: '1px solid var(--border-primary)',
+              background: isQrOrder ? 'var(--empire-red-tint)' : '#ffffff',
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span style={{ fontWeight: 800, fontSize: '1.05rem' }}>
+                    {currentOrder.order_number}
+                  </span>
+                  {isQrOrder && (
+                    <span
+                      style={{
+                        background: 'var(--empire-red)',
+                        color: '#ffffff',
+                        fontSize: '0.68rem',
+                        fontWeight: 800,
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <QrCode size={11} /> Table {currentOrder.table_number} QR
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+                  {currentOrder.table_number ? `Table ${currentOrder.table_number}` : currentOrder.order_type}
+                  {currentOrder.guest_name ? ` • Guest: ${currentOrder.guest_name}` : ''}
+                </div>
+              </div>
+
+              {/* Payment Status Pill */}
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  padding: '4px 10px',
+                  borderRadius: 20,
+                  background: isPaidOnline ? '#dcfce7' : '#fef3c7',
+                  color: isPaidOnline ? '#15803d' : '#854d0e',
+                }}
+              >
+                {isPaidOnline ? 'Paid Online (UPI) ✓' : 'Pay at Counter'}
+              </span>
+            </div>
+
+            {/* If guest requested bill banner */}
+            {currentOrder.notes?.includes('GUEST REQUESTED BILL') && (
+              <div
+                style={{
+                  background: '#fef2f2',
+                  border: '1px solid #fee2e2',
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  marginTop: 8,
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  color: '#991b1b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <Bell size={13} color="#ef4444" />
+                <span>Guest at Table {currentOrder.table_number} requested final bill!</span>
+              </div>
+            )}
           </div>
 
           <div className="cart-items">
@@ -320,8 +471,11 @@ export default function Orders() {
                     </button>
                   </div>
                   <div className="cart-item-total">₹{item.total_price}</div>
-                  <button className="btn btn-icon btn-ghost btn-sm" onClick={() => removeCartItem(i)}
-                    style={{ padding: 4, minWidth: 'auto', color: 'var(--accent-danger)' }}>
+                  <button
+                    className="btn btn-icon btn-ghost btn-sm"
+                    onClick={() => removeCartItem(i)}
+                    style={{ padding: 4, minWidth: 'auto', color: 'var(--accent-danger)' }}
+                  >
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -369,10 +523,13 @@ export default function Orders() {
                     <Percent size={14} /> Discount
                   </button>
                   <button className="btn btn-success btn-sm" style={{ flex: 1 }} onClick={() => setShowPayment(true)}>
-                    <CreditCard size={14} /> Pay & Close
+                    <CreditCard size={14} /> {isPaidOnline ? 'Print Receipt & Close' : 'Pay & Close'}
                   </button>
-                  <button className="btn btn-ghost btn-sm" onClick={handleCancelOrder}
-                    style={{ color: 'var(--accent-danger)' }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleCancelOrder}
+                    style={{ color: 'var(--accent-danger)' }}
+                  >
                     <X size={14} />
                   </button>
                 </div>
@@ -392,19 +549,21 @@ export default function Orders() {
                 </button>
               </div>
               <div className="modal-body">
-                <div style={{
-                  background: 'var(--empire-red-tint)',
-                  border: '1.5px solid var(--empire-red-border)',
-                  borderRadius: 14,
-                  padding: '18px 20px',
-                  textAlign: 'center',
-                  marginBottom: 20,
-                }}>
+                <div
+                  style={{
+                    background: 'var(--empire-red-tint)',
+                    border: '1.5px solid var(--empire-red-border)',
+                    borderRadius: 14,
+                    padding: '18px 20px',
+                    textAlign: 'center',
+                    marginBottom: 20,
+                  }}
+                >
                   <div style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--empire-red)', lineHeight: 1.1 }}>
                     ₹{Math.round(currentOrder.total_amount || total).toLocaleString('en-IN')}
                   </div>
                   <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-tertiary)', marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    Total Bill Amount
+                    {isPaidOnline ? 'Already Paid Online via UPI' : 'Total Bill Amount'}
                   </div>
                 </div>
 
@@ -456,17 +615,23 @@ export default function Orders() {
                 <div className="form-group">
                   <label>Discount Type</label>
                   <div className="tabs">
-                    <button className={`tab ${discountType === 'flat' ? 'active' : ''}`}
-                      onClick={() => setDiscountType('flat')}>Flat (₹)</button>
-                    <button className={`tab ${discountType === 'percentage' ? 'active' : ''}`}
-                      onClick={() => setDiscountType('percentage')}>Percentage (%)</button>
+                    <button className={`tab ${discountType === 'flat' ? 'active' : ''}`} onClick={() => setDiscountType('flat')}>
+                      Flat (₹)
+                    </button>
+                    <button className={`tab ${discountType === 'percentage' ? 'active' : ''}`} onClick={() => setDiscountType('percentage')}>
+                      Percentage (%)
+                    </button>
                   </div>
                 </div>
                 <div className="form-group">
                   <label>Amount</label>
-                  <input className="form-input" type="number" value={discountValue}
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={discountValue}
                     onChange={(e) => setDiscountValue(e.target.value)}
-                    placeholder={discountType === 'flat' ? 'Enter amount in ₹' : 'Enter percentage'} />
+                    placeholder={discountType === 'flat' ? 'Enter amount in ₹' : 'Enter percentage'}
+                  />
                 </div>
               </div>
               <div className="modal-footer">
@@ -480,74 +645,231 @@ export default function Orders() {
     );
   }
 
-  // List view (default)
+  // Active Orders List View (Default)
   return (
-    <div className="page-content">
-      <div className="flex items-center justify-between mb-6">
+    <div className="page-content" style={{ paddingBottom: 60 }}>
+      {/* Top Action & Navigation Bar */}
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div className="flex gap-2">
           <button className="btn btn-primary" onClick={() => startNewOrder('dine-in')}>
-            <Plus size={16} /> New Dine-in
+            <Plus size={16} /> New Dine-in Table
           </button>
-          <button className="btn btn-ghost" onClick={() => startNewOrder('takeaway')}>
+          <button className="btn btn-outline" onClick={() => startNewOrder('takeaway')}>
             <Plus size={16} /> Takeaway
           </button>
-          <button className="btn btn-ghost" onClick={() => startNewOrder('delivery')}>
+          <button className="btn btn-outline" onClick={() => startNewOrder('delivery')}>
             <Plus size={16} /> Delivery
           </button>
         </div>
+
+        {/* Filter Pills */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[
+            { id: 'all', label: `All Orders (${orders.length})` },
+            { id: 'qr', label: `📱 Table QR (${orders.filter(o => o.order_source === 'qr_guest').length})` },
+            { id: 'dine-in', label: `Dine-in (${orders.filter(o => o.order_type === 'dine-in' && o.order_source !== 'qr_guest').length})` },
+            { id: 'takeaway', label: `Takeaway (${orders.filter(o => o.order_type === 'takeaway').length})` },
+          ].map((flt) => (
+            <button
+              key={flt.id}
+              onClick={() => setOrderFilter(flt.id)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 20,
+                border: orderFilter === flt.id ? '1.5px solid var(--empire-red)' : '1px solid var(--border-primary)',
+                background: orderFilter === flt.id ? 'var(--empire-red-tint)' : '#ffffff',
+                color: orderFilter === flt.id ? 'var(--empire-red)' : 'var(--text-secondary)',
+                fontWeight: orderFilter === flt.id ? 800 : 600,
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+              }}
+            >
+              {flt.label}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* Orders Table Card */}
       <div className="card">
-        <div className="card-header">
-          <h3>Active Orders ({orders.length})</h3>
+        <div className="card-header flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h3 style={{ margin: 0 }}>Active Orders ({displayOrders.length})</h3>
+            <span style={{ fontSize: '0.72rem', background: '#ecfdf5', color: '#15803d', padding: '2px 8px', borderRadius: 12, fontWeight: 700 }}>
+              Live Polling Active (3s)
+            </span>
+          </div>
+
+          <button onClick={loadData} className="btn btn-ghost btn-sm" style={{ gap: 4 }}>
+            <RefreshCw size={13} /> Refresh
+          </button>
         </div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {orders.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">📋</div>
-              <h3>No active orders</h3>
-              <p>Create a new order to get started</p>
+
+        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          {displayOrders.length === 0 ? (
+            <div className="empty-state" style={{ padding: '40px 20px', textAlign: 'center' }}>
+              <div className="empty-icon" style={{ fontSize: '2.5rem', marginBottom: 8 }}>📋</div>
+              <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: 800 }}>No active orders found</h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                When customers order via table QR or you create a counter order, they will appear here in real-time.
+              </p>
             </div>
           ) : (
-            <table className="data-table">
+            <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr>
-                  <th>Order #</th>
-                  <th>Type</th>
-                  <th>Table</th>
-                  <th>Items</th>
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th>Time</th>
-                  <th></th>
+                <tr style={{ background: '#f8fafc', borderBottom: '1.5px solid var(--border-primary)' }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Order #</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Source & Table</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Guest Info</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Items</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Amount</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Payment</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'left' }}>Time</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {orders.map((order) => (
-                  <tr key={order.id} style={{ cursor: 'pointer' }}
-                    onClick={() => loadExistingOrder(order.id)}>
-                    <td style={{ fontWeight: 700 }}>{order.order_number}</td>
-                    <td>
-                      <span className={`badge ${order.order_type === 'dine-in' ? 'badge-info' : order.order_type === 'takeaway' ? 'badge-warning' : 'badge-purple'}`}>
-                        {order.order_type}
-                      </span>
-                    </td>
-                    <td>{order.table_number || '—'}</td>
-                    <td>{order.item_count} items</td>
-                    <td style={{ fontWeight: 700, color: 'var(--accent-success-light)' }}>
-                      ₹{order.total_amount.toLocaleString('en-IN')}
-                    </td>
-                    <td><span className="badge badge-warning">{order.status}</span></td>
-                    <td className="text-muted text-sm">
-                      {new Date(order.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td>
-                      <button className="btn btn-sm btn-ghost" onClick={(e) => { e.stopPropagation(); loadExistingOrder(order.id); }}>
-                        Open
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {displayOrders.map((order) => {
+                  const isQr = order.order_source === 'qr_guest';
+                  const isPaidOnline = order.payment_status === 'paid' || order.payment_method === 'upi';
+                  const billRequested = order.notes?.includes('GUEST REQUESTED BILL');
+
+                  return (
+                    <tr
+                      key={order.id}
+                      style={{
+                        cursor: 'pointer',
+                        borderBottom: '1px solid var(--border-primary)',
+                        background: billRequested ? '#fef2f2' : '#ffffff',
+                      }}
+                      onClick={() => loadExistingOrder(order.id)}
+                    >
+                      {/* Order Number */}
+                      <td style={{ padding: '14px 16px' }}>
+                        <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>
+                          {order.order_number}
+                        </div>
+                        {billRequested && (
+                          <span
+                            style={{
+                              background: '#fee2e2',
+                              color: '#991b1b',
+                              fontSize: '0.68rem',
+                              fontWeight: 800,
+                              padding: '2px 6px',
+                              borderRadius: 4,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3,
+                              marginTop: 2,
+                            }}
+                          >
+                            <Bell size={10} color="#ef4444" /> Bill Requested
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Source & Table */}
+                      <td style={{ padding: '14px 16px' }}>
+                        <div className="flex items-center gap-1.5">
+                          {isQr ? (
+                            <span
+                              style={{
+                                background: 'var(--empire-red-tint)',
+                                color: 'var(--empire-red)',
+                                border: '1px solid var(--empire-red-border)',
+                                fontSize: '0.72rem',
+                                fontWeight: 800,
+                                padding: '3px 8px',
+                                borderRadius: 12,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
+                            >
+                              <QrCode size={12} /> Table {order.table_number || 'QR'}
+                            </span>
+                          ) : (
+                            <span
+                              className={`badge ${
+                                order.order_type === 'dine-in'
+                                  ? 'badge-info'
+                                  : order.order_type === 'takeaway'
+                                  ? 'badge-warning'
+                                  : 'badge-purple'
+                              }`}
+                            >
+                              {order.table_number ? `Table ${order.table_number}` : order.order_type}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Guest Details */}
+                      <td style={{ padding: '14px 16px', fontSize: '0.82rem' }}>
+                        <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {order.guest_name || order.customer_name || 'Guest'}
+                        </div>
+                        {(order.guest_phone || order.customer_phone) && (
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                            {order.guest_phone || order.customer_phone}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Item Count */}
+                      <td style={{ padding: '14px 16px', fontSize: '0.85rem' }}>
+                        <span style={{ fontWeight: 600 }}>{order.item_count} items</span>
+                      </td>
+
+                      {/* Total Amount */}
+                      <td style={{ padding: '14px 16px' }}>
+                        <span style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--text-primary)' }}>
+                          ₹{order.total_amount?.toLocaleString('en-IN')}
+                        </span>
+                      </td>
+
+                      {/* Payment Status Pill */}
+                      <td style={{ padding: '14px 16px' }}>
+                        <span
+                          style={{
+                            fontSize: '0.72rem',
+                            fontWeight: 800,
+                            padding: '3px 8px',
+                            borderRadius: 12,
+                            background: isPaidOnline ? '#dcfce7' : '#fffbeb',
+                            color: isPaidOnline ? '#15803d' : '#b45309',
+                            border: `1px solid ${isPaidOnline ? '#bbf7d0' : '#fef08a'}`,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          {isPaidOnline ? 'Paid (UPI) ✓' : 'Pay at Counter'}
+                        </span>
+                      </td>
+
+                      {/* Time */}
+                      <td style={{ padding: '14px 16px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        {new Date(order.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+
+                      {/* Action Button */}
+                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                        <button
+                          className="btn btn-sm btn-primary"
+                          style={{ fontSize: '0.78rem', padding: '5px 12px', fontWeight: 700 }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            loadExistingOrder(order.id);
+                          }}
+                        >
+                          Open in POS ↗
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}

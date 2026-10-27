@@ -44,6 +44,30 @@ function generateKotNumber(db) {
   return kotNum;
 }
 
+// Helper to calculate preparation status from KOTs and order items
+function computePrepStatus(kots = [], items = []) {
+  if (!kots.length && !items.length) return 'received';
+
+  const kotStatuses = kots.map(k => k.status);
+  const itemStatuses = items.map(i => i.status);
+
+  // Ready to serve takes high precedence so customer gets notified immediately!
+  if (kotStatuses.includes('ready') || itemStatuses.includes('ready')) {
+    return 'ready';
+  }
+  if (kotStatuses.includes('preparing') || itemStatuses.includes('preparing')) {
+    return 'preparing';
+  }
+  if (kotStatuses.length > 0 && kotStatuses.every(s => s === 'completed')) {
+    return 'served';
+  }
+  if (itemStatuses.length > 0 && itemStatuses.every(s => s === 'served')) {
+    return 'served';
+  }
+
+  return 'received';
+}
+
 // GET table menu & active status for QR ordering
 router.get('/table/:tableNumber', (req, res) => {
   const db = getDb();
@@ -56,7 +80,10 @@ router.get('/table/:tableNumber', (req, res) => {
   }
 
   // Get restaurant profile & settings
-  const settings = db.prepare('SELECT restaurant_name, address, phone, gst_number, tax_percentage, currency_symbol FROM settings WHERE id = 1').get();
+  const settings = db.prepare(`
+    SELECT restaurant_name, address, phone, gst_number, tax_percentage, service_charge_percentage, currency_symbol, primary_color, tagline, icon_emoji, upi_id 
+    FROM settings WHERE id = 1
+  `).get();
 
   // Get active menu categories and items
   const categories = db.prepare('SELECT * FROM categories WHERE is_active = 1 ORDER BY sort_order, name').all();
@@ -77,9 +104,12 @@ router.get('/table/:tableNumber', (req, res) => {
 
   let activeOrderItems = [];
   let kots = [];
+  let prepStatus = 'received';
+
   if (activeOrder) {
     activeOrderItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(activeOrder.id);
     kots = db.prepare('SELECT * FROM kot WHERE order_id = ? ORDER BY id DESC').all(activeOrder.id);
+    prepStatus = computePrepStatus(kots, activeOrderItems);
   }
 
   res.json({
@@ -93,7 +123,12 @@ router.get('/table/:tableNumber', (req, res) => {
     settings,
     categories,
     menuItems,
-    activeOrder: activeOrder ? { ...activeOrder, items: activeOrderItems, kots } : null,
+    activeOrder: activeOrder ? {
+      ...activeOrder,
+      items: activeOrderItems,
+      kots,
+      prep_status: prepStatus,
+    } : null,
   });
 });
 
@@ -101,7 +136,13 @@ router.get('/table/:tableNumber', (req, res) => {
 router.post('/table/:tableNumber/order', (req, res) => {
   const db = getDb();
   const { tableNumber } = req.params;
-  const { items, guest_name, guest_phone, special_instructions } = req.body;
+  const {
+    items,
+    guest_name,
+    guest_phone,
+    special_instructions,
+    payment_preference = 'counter', // 'counter' or 'pay_here'
+  } = req.body;
 
   if (!items || !items.length) {
     return res.status(400).json({ error: 'No items in order' });
@@ -115,19 +156,58 @@ router.post('/table/:tableNumber/order', (req, res) => {
   const settings = db.prepare('SELECT tax_percentage, service_charge_percentage FROM settings WHERE id = 1').get();
   const taxRate = settings ? settings.tax_percentage : 5.0;
 
+  const isPayOnline = payment_preference === 'pay_here' || payment_preference === 'upi';
+  const paymentMethod = isPayOnline ? 'upi' : 'cash';
+  const paymentStatus = isPayOnline ? 'paid' : 'pending';
+
   const transaction = db.transaction(() => {
     // Check if table already has an active order
     let order = db.prepare("SELECT * FROM orders WHERE table_id = ? AND status = 'active'").get(table.id);
 
     if (!order) {
       // Create new order
-      const orderNumber = `ORD-${Date.now().toString().slice(-6)}`;
+      const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, '');
+      const rand = Math.floor(100 + Math.random() * 900);
+      const orderNumber = `ORD-${dateStr}-${rand}`;
+
       const result = db.prepare(`
-        INSERT INTO orders (order_number, table_id, order_type, order_source, guest_name, guest_phone, special_instructions, status)
-        VALUES (?, ?, 'dine-in', 'qr_guest', ?, ?, ?, 'active')
-      `).run(orderNumber, table.id, guest_name || 'Table Guest', guest_phone || '', special_instructions || '');
+        INSERT INTO orders (
+          order_number, table_id, order_type, order_source, guest_name, guest_phone,
+          special_instructions, payment_preference, payment_method, payment_status, status
+        )
+        VALUES (?, ?, 'dine-in', 'qr_guest', ?, ?, ?, ?, ?, ?, 'active')
+      `).run(
+        orderNumber,
+        table.id,
+        guest_name || 'Table Guest',
+        guest_phone || '',
+        special_instructions || '',
+        isPayOnline ? 'pay_here' : 'counter',
+        paymentMethod,
+        paymentStatus
+      );
 
       order = db.prepare('SELECT * FROM orders WHERE id = ?').get(result.lastInsertRowid);
+    } else {
+      // Update existing order with guest info & payment preference if provided
+      db.prepare(`
+        UPDATE orders SET
+          order_source = 'qr_guest',
+          guest_name = CASE WHEN ? != '' THEN ? ELSE guest_name END,
+          guest_phone = CASE WHEN ? != '' THEN ? ELSE guest_phone END,
+          payment_preference = ?,
+          payment_method = ?,
+          payment_status = CASE WHEN ? = 'paid' THEN 'paid' ELSE payment_status END,
+          updated_at = datetime('now')
+        WHERE id = ?
+      `).run(
+        guest_name || '', guest_name || '',
+        guest_phone || '', guest_phone || '',
+        isPayOnline ? 'pay_here' : 'counter',
+        paymentMethod,
+        paymentStatus,
+        order.id
+      );
     }
 
     // Insert order items
@@ -181,7 +261,8 @@ router.post('/table/:tableNumber/order', (req, res) => {
 
     // Generate KOT immediately for kitchen display!
     const kotNumber = generateKotNumber(db);
-    const kotNotes = `📱 QR Order Table ${table.table_number}${special_instructions ? ` • Note: ${special_instructions}` : ''}`;
+    const payNote = isPayOnline ? ' • [PAID ONLINE VIA UPI]' : ' • [PAY AT COUNTER]';
+    const kotNotes = `📱 QR Order Table ${table.table_number}${special_instructions ? ` • Note: ${special_instructions}` : ''}${payNote}`;
 
     db.prepare(`
       INSERT INTO kot (kot_number, order_id, table_number, status, items, notes)
@@ -196,6 +277,7 @@ router.post('/table/:tableNumber/order', (req, res) => {
       orderNumber: order.order_number,
       kotNumber,
       totalAmount,
+      paymentPreference: isPayOnline ? 'pay_here' : 'counter',
     };
   });
 
@@ -212,7 +294,7 @@ router.post('/table/:tableNumber/order', (req, res) => {
   }
 });
 
-// GET order live status for guest
+// GET order live status for guest (polled by customer phone)
 router.get('/order/:orderId/status', (req, res) => {
   const db = getDb();
   const { orderId } = req.params;
@@ -222,11 +304,50 @@ router.get('/order/:orderId/status', (req, res) => {
 
   const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId);
   const kots = db.prepare('SELECT * FROM kot WHERE order_id = ? ORDER BY id DESC').all(orderId);
+  const prepStatus = computePrepStatus(kots, items);
 
   res.json({
-    order,
+    order: {
+      ...order,
+      prep_status: prepStatus,
+    },
     items,
     kots,
+  });
+});
+
+// POST guest updates payment preference (Pay Here via UPI vs Pay at Counter)
+router.post('/order/:orderId/pay', (req, res) => {
+  const db = getDb();
+  const { orderId } = req.params;
+  const { preference = 'pay_here', transaction_id } = req.body;
+
+  const isOnline = preference === 'pay_here';
+  const noteAppend = isOnline
+    ? ` [PAID ONLINE VIA UPI - Ref: ${transaction_id || 'CONFIRMED'}]`
+    : ` [GUEST CONFIRMED PAY AT COUNTER]`;
+
+  db.prepare(`
+    UPDATE orders SET
+      payment_preference = ?,
+      payment_method = ?,
+      payment_status = ?,
+      notes = COALESCE(notes, '') || ?,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).run(
+    isOnline ? 'pay_here' : 'counter',
+    isOnline ? 'upi' : 'cash',
+    isOnline ? 'paid' : 'pending',
+    noteAppend,
+    orderId
+  );
+
+  const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  res.json({
+    success: true,
+    message: isOnline ? 'Payment confirmed! Thank you.' : 'Preference saved: You can pay at the counter.',
+    order: updatedOrder,
   });
 });
 
@@ -235,7 +356,7 @@ router.post('/order/:orderId/request-bill', (req, res) => {
   const db = getDb();
   const { orderId } = req.params;
 
-  db.prepare("UPDATE orders SET notes = notes || ' [GUEST REQUESTED BILL AT TABLE]', updated_at = datetime('now') WHERE id = ?").run(orderId);
+  db.prepare("UPDATE orders SET notes = COALESCE(notes, '') || ' [GUEST REQUESTED BILL AT TABLE]', updated_at = datetime('now') WHERE id = ?").run(orderId);
   res.json({ success: true, message: 'Captain notified! Your bill is being brought to your table.' });
 });
 

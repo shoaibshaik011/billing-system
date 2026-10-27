@@ -90,6 +90,7 @@ export const getGuestTableMenu = (tableNumber) => request(`/guest/table/${tableN
 export const placeGuestOrder = (tableNumber, data) => request(`/guest/table/${tableNumber}/order`, { method: 'POST', body: data });
 export const getGuestOrderStatus = (orderId) => request(`/guest/order/${orderId}/status`);
 export const requestGuestBill = (orderId) => request(`/guest/order/${orderId}/request-bill`, { method: 'POST' });
+export const payGuestOrder = (orderId, data) => request(`/guest/order/${orderId}/pay`, { method: 'POST', body: data });
 
 // SaaS Vendor / Super Admin Client Customizer & Provisioner
 export const getAdminTenants = () => request('/admin/tenants');
