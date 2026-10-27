@@ -14,3 +14,7 @@ Thumbs.db
 *.log
 .env
 .env.local
+
+# SQLite temporary journal files
+*.db-wal
+*.db-shm
