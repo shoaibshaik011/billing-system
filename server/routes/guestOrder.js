@@ -97,14 +97,16 @@ router.post('/table/:tableNumber/order', (req, res) => {
 
     const kotItemsList = [];
     for (const item of items) {
-      const unitPrice = parseFloat(item.price);
-      const qty = parseInt(item.quantity) || 1;
+      const itemName = item.name || item.item_name || 'Item';
+      const menuItemId = item.id || item.menu_item_id || null;
+      const unitPrice = parseFloat(item.price || item.item_price || 0);
+      const qty = parseInt(item.quantity, 10) || 1;
       const totalItemPrice = unitPrice * qty;
 
       insertItem.run(
         order.id,
-        item.id || null,
-        item.name,
+        menuItemId,
+        itemName,
         qty,
         unitPrice,
         totalItemPrice,
@@ -112,7 +114,7 @@ router.post('/table/:tableNumber/order', (req, res) => {
       );
 
       kotItemsList.push({
-        name: item.name,
+        name: itemName,
         quantity: qty,
         is_veg: item.is_veg ?? 1,
         notes: item.notes || '',
