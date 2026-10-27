@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Minus, Trash2, X, CreditCard, Banknote, Smartphone,
-  Percent, Receipt, ArrowLeft, RefreshCw, QrCode, Bell, User, Clock, Check
+  Percent, Receipt, ArrowLeft, RefreshCw, QrCode, Bell, User, Clock, Check,
+  Printer, Eye
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import * as api from '../api';
@@ -23,6 +24,7 @@ export default function Orders() {
   const [showDiscount, setShowDiscount] = useState(false);
   const [discountValue, setDiscountValue] = useState('');
   const [discountType, setDiscountType] = useState('flat');
+  const [receiptOrder, setReceiptOrder] = useState(null); // Tax invoice receipt modal state
 
   // List view states
   const [orders, setOrders] = useState([]);
@@ -192,11 +194,29 @@ export default function Orders() {
     }
   }
 
+  async function openReceipt(orderId) {
+    try {
+      const order = await api.getOrder(orderId);
+      setReceiptOrder(order);
+    } catch (err) {
+      toast.error('Failed to load bill receipt');
+    }
+  }
+
+  function handlePrintReceipt() {
+    window.print();
+  }
+
   async function handlePayment(method) {
     if (!currentOrder) return;
     try {
       await api.completeOrder(currentOrder.id, { payment_method: method });
       toast.success(`Payment received via ${method.toUpperCase()}! 🎉`);
+      
+      // Load completed order with items & immediately display the printable tax receipt!
+      const completed = await api.getOrder(currentOrder.id);
+      setReceiptOrder(completed);
+
       setCurrentOrder(null);
       setCartItems([]);
       setShowPayment(false);
@@ -909,18 +929,31 @@ export default function Orders() {
                         {new Date(order.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                       </td>
 
-                      {/* Action Button */}
+                      {/* Action Buttons */}
                       <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                        <button
-                          className="btn btn-sm btn-primary"
-                          style={{ fontSize: '0.78rem', padding: '5px 12px', fontWeight: 700 }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            loadExistingOrder(order.id);
-                          }}
-                        >
-                          Open in POS ↗
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            style={{ fontSize: '0.78rem', padding: '5px 10px', fontWeight: 700, gap: 4 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openReceipt(order.id);
+                            }}
+                            title="View & Print Bill Receipt"
+                          >
+                            <Receipt size={14} /> Receipt
+                          </button>
+                          <button
+                            className="btn btn-sm btn-primary"
+                            style={{ fontSize: '0.78rem', padding: '5px 12px', fontWeight: 700 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              loadExistingOrder(order.id);
+                            }}
+                          >
+                            Open in POS ↗
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -930,6 +963,166 @@ export default function Orders() {
           )}
         </div>
       </div>
+
+      {/* Printable Tax Invoice / Receipt Modal */}
+      {receiptOrder && (
+        <div className="modal-overlay" onClick={() => setReceiptOrder(null)} style={{ zIndex: 1000 }}>
+          <div
+            className="modal-card animate-in"
+            style={{ maxWidth: 450, padding: 22, background: '#ffffff', borderRadius: 16 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-3 no-print">
+              <div className="flex items-center gap-2">
+                <Receipt className="text-primary" size={20} />
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0 }}>Tax Invoice Receipt</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button className="btn btn-primary btn-sm" onClick={handlePrintReceipt} style={{ gap: 4, fontWeight: 700 }}>
+                  <Printer size={15} /> Print
+                </button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setReceiptOrder(null)}>
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* Thermal 80mm Receipt Preview */}
+            <div
+              className="receipt-preview p-4 rounded"
+              style={{
+                background: '#ffffff',
+                color: '#111827',
+                fontFamily: 'monospace, Courier New, sans-serif',
+                fontSize: '0.82rem',
+                border: '1.5px dashed #cbd5e1',
+                padding: '16px',
+                lineHeight: 1.4,
+              }}
+            >
+              {/* Restaurant Header */}
+              <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 900, margin: '0 0 2px', letterSpacing: -0.5 }}>
+                  {settings?.restaurant_name || 'EMPIRE RESTAURANT'}
+                </h2>
+                <div style={{ fontSize: '0.74rem', color: '#4b5563' }}>
+                  {settings?.address || 'Main Branch, City'}
+                </div>
+                {settings?.phone && (
+                  <div style={{ fontSize: '0.74rem', color: '#4b5563' }}>Ph: {settings?.phone}</div>
+                )}
+                {settings?.gst_number && (
+                  <div style={{ fontSize: '0.75rem', fontWeight: 800, marginTop: 4, letterSpacing: 0.5 }}>
+                    GSTIN: {settings?.gst_number}
+                  </div>
+                )}
+              </div>
+
+              {/* Bill Details */}
+              <div style={{ borderTop: '1px dashed #94a3b8', borderBottom: '1px dashed #94a3b8', padding: '6px 0', margin: '8px 0', fontSize: '0.75rem' }}>
+                <div className="flex justify-between">
+                  <span>Bill No: <strong>{receiptOrder.order_number}</strong></span>
+                  <span>{new Date(receiptOrder.created_at).toLocaleDateString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between mt-1">
+                  <span>Type / Table: <strong>{receiptOrder.table_number ? `Table ${receiptOrder.table_number}` : receiptOrder.order_type}</strong></span>
+                  <span>{new Date(receiptOrder.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                {receiptOrder.guest_name && (
+                  <div className="flex justify-between mt-1">
+                    <span>Guest: {receiptOrder.guest_name}</span>
+                    {receiptOrder.guest_phone && <span>{receiptOrder.guest_phone}</span>}
+                  </div>
+                )}
+              </div>
+
+              {/* Items Table */}
+              <table style={{ width: '100%', fontSize: '0.76rem', borderCollapse: 'collapse', margin: '8px 0' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #94a3b8' }}>
+                    <th style={{ textAlign: 'left', padding: '4px 0' }}>Item</th>
+                    <th style={{ textAlign: 'center', padding: '4px 0', width: 40 }}>Qty</th>
+                    <th style={{ textAlign: 'right', padding: '4px 0', width: 60 }}>Rate</th>
+                    <th style={{ textAlign: 'right', padding: '4px 0', width: 70 }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {receiptOrder.items?.map((item, i) => (
+                    <tr key={item.id || i} style={{ borderBottom: '1px dotted #e2e8f0' }}>
+                      <td style={{ padding: '4px 0', fontWeight: 600 }}>{item.item_name}</td>
+                      <td style={{ textAlign: 'center', padding: '4px 0' }}>{item.quantity}</td>
+                      <td style={{ textAlign: 'right', padding: '4px 0' }}>₹{item.item_price || item.unit_price}</td>
+                      <td style={{ textAlign: 'right', padding: '4px 0', fontWeight: 700 }}>₹{item.total_price}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Financial Totals */}
+              <div style={{ borderTop: '1px dashed #94a3b8', paddingTop: 6, fontSize: '0.76rem' }}>
+                <div className="flex justify-between py-1">
+                  <span>Subtotal</span>
+                  <span>₹{(receiptOrder.subtotal || 0).toFixed(2)}</span>
+                </div>
+                {receiptOrder.discount_amount > 0 && (
+                  <div className="flex justify-between py-1 text-danger">
+                    <span>Discount</span>
+                    <span>-₹{receiptOrder.discount_amount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between py-1">
+                  <span>GST ({settings?.tax_percentage || 5}%)</span>
+                  <span>₹{(receiptOrder.tax_amount || 0).toFixed(2)}</span>
+                </div>
+                {receiptOrder.service_charge > 0 && (
+                  <div className="flex justify-between py-1">
+                    <span>Service Charge</span>
+                    <span>₹{receiptOrder.service_charge.toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div
+                  className="flex justify-between py-2"
+                  style={{
+                    borderTop: '1.5px solid #0f172a',
+                    borderBottom: '1.5px solid #0f172a',
+                    fontWeight: 900,
+                    fontSize: '0.98rem',
+                    margin: '6px 0',
+                  }}
+                >
+                  <span>GRAND TOTAL</span>
+                  <span>₹{Math.round(receiptOrder.total_amount || 0).toLocaleString('en-IN')}</span>
+                </div>
+
+                <div className="flex justify-between py-1" style={{ fontSize: '0.74rem' }}>
+                  <span>Payment Mode</span>
+                  <span style={{ fontWeight: 800, textTransform: 'uppercase' }}>
+                    {receiptOrder.payment_status === 'paid' || receiptOrder.payment_preference === 'pay_here'
+                      ? '🟢 ONLINE (UPI) - PAID'
+                      : '💵 PAY AT COUNTER'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div style={{ textAlign: 'center', marginTop: 14, fontSize: '0.72rem', color: '#64748b' }}>
+                ✨ Thank you for dining with us! 🙏<br />
+                Visit Again soon!
+              </div>
+            </div>
+
+            <div className="modal-footer flex justify-between mt-4 no-print" style={{ padding: 0 }}>
+              <button className="btn btn-secondary" onClick={() => setReceiptOrder(null)}>
+                Close
+              </button>
+              <button className="btn btn-primary" onClick={handlePrintReceipt} style={{ gap: 6, fontWeight: 800 }}>
+                <Printer size={16} /> Print Tax Receipt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
