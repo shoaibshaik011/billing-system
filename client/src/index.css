@@ -1545,6 +1545,9 @@ a:hover {
   .tabs,
   .modal-header,
   .modal-footer,
+  .pos-menu,
+  .pos-cart,
+  .pos-layout > *:not(.modal-overlay),
   .page-content > *:not(.modal-overlay) {
     display: none !important;
   }

@@ -26,14 +26,27 @@ router.get('/dashboard', (req, res) => {
   const paymentBreakdown = db.prepare(`
     SELECT 
       CASE 
-        WHEN payment_status = 'paid' OR payment_preference = 'pay_here' THEN 'UPI (Online)'
+        WHEN payment_method = 'cash' THEN 'Cash'
+        WHEN payment_method = 'card' THEN 'Card'
+        WHEN payment_method = 'upi' OR payment_preference = 'pay_here' THEN 'UPI (Online)'
+        WHEN payment_method = 'split' THEN 'Split Bill'
+        WHEN payment_status = 'paid' THEN 'Cash'
         ELSE 'Pay at Counter'
       END as payment_method,
       COUNT(*) as count, 
       COALESCE(SUM(total_amount), 0) as total
     FROM orders 
     WHERE DATE(created_at) = ? AND status != 'cancelled'
-    GROUP BY (CASE WHEN payment_status = 'paid' OR payment_preference = 'pay_here' THEN 'UPI (Online)' ELSE 'Pay at Counter' END)
+    GROUP BY (
+      CASE 
+        WHEN payment_method = 'cash' THEN 'Cash'
+        WHEN payment_method = 'card' THEN 'Card'
+        WHEN payment_method = 'upi' OR payment_preference = 'pay_here' THEN 'UPI (Online)'
+        WHEN payment_method = 'split' THEN 'Split Bill'
+        WHEN payment_status = 'paid' THEN 'Cash'
+        ELSE 'Pay at Counter'
+      END
+    )
   `).all(today);
 
   // Top selling items today (live from all active + completed orders)

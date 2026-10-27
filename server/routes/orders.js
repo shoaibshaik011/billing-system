@@ -96,6 +96,11 @@ router.get('/', (req, res) => {
 // GET single order with items
 router.get('/:id', (req, res) => {
   const db = getDb();
+
+  try {
+    recalculateOrder(db, req.params.id);
+  } catch (err) {}
+
   const order = db.prepare(`
     SELECT o.*, t.table_number, c.name as customer_name, c.phone as customer_phone
     FROM orders o
@@ -245,10 +250,50 @@ router.patch('/:id/discount', (req, res) => {
 // PATCH complete order (generate bill)
 router.patch('/:id/complete', (req, res) => {
   const db = getDb();
-  const { payment_method, customer_id } = req.body;
+  const { payment_method, customer_id, items } = req.body;
 
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  // If unsaved items were passed with the settlement
+  if (items && Array.isArray(items) && items.length > 0) {
+    const insertItem = db.prepare(`
+      INSERT INTO order_items (order_id, menu_item_id, item_name, item_price, quantity, total_price, notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const kotItems = [];
+
+    const addItems = db.transaction(() => {
+      for (const item of items) {
+        const menuItem = db.prepare('SELECT * FROM menu_items WHERE id = ?').get(item.menu_item_id);
+        if (!menuItem) continue;
+
+        const qty = item.quantity || 1;
+        const totalPrice = menuItem.price * qty;
+
+        insertItem.run(req.params.id, menuItem.id, menuItem.name, menuItem.price, qty, totalPrice, item.notes || '');
+
+        kotItems.push({
+          name: menuItem.name,
+          quantity: qty,
+          notes: item.notes || '',
+          is_veg: menuItem.is_veg,
+        });
+      }
+    });
+    addItems();
+
+    if (kotItems.length > 0) {
+      const kotNumber = generateKotNumber();
+      db.prepare(`
+        INSERT INTO kot (kot_number, order_id, table_number, items, notes, status)
+        VALUES (?, ?, ?, ?, ?, 'completed')
+      `).run(kotNumber, req.params.id, order.table_number || '', JSON.stringify(kotItems), '');
+    }
+  }
+
+  // Always recalculate order totals from order_items
+  recalculateOrder(db, req.params.id);
 
   db.prepare(`
     UPDATE orders SET status='completed', payment_method=?, payment_status='paid', 
