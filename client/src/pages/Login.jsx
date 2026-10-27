@@ -7,6 +7,7 @@ import {
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../api';
+import { applyTheme } from '../theme';
 
 export default function Login({ tenant: propTenant }) {
   const navigate = useNavigate();
@@ -53,8 +54,7 @@ export default function Login({ tenant: propTenant }) {
           if (res.success && res.tenant) {
             setTenant(res.tenant);
             const color = res.tenant.primary_color || '#e11d24';
-            document.documentElement.style.setProperty('--empire-red', color);
-            document.documentElement.style.setProperty('--accent-primary', color);
+            applyTheme(color);
           }
         })
         .catch(() => {});

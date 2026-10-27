@@ -169,7 +169,7 @@ export default function Header({ tenant }) {
                     fontSize: '0.65rem',
                     fontWeight: 700,
                     textTransform: 'uppercase',
-                    color: user.role === 'admin' ? '#e11d24' : user.role === 'superadmin' ? '#7c3aed' : '#16a34a',
+                    color: user.role === 'admin' ? 'var(--empire-red)' : user.role === 'superadmin' ? '#7c3aed' : '#16a34a',
                   }}
                 >
                   {user.role}

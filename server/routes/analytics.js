@@ -121,6 +121,25 @@ router.get('/dashboard', (req, res) => {
     LIMIT 6
   `).all(...tenantParams);
 
+  let settings;
+  if (tenantSlug) {
+    const tenant = db.prepare('SELECT * FROM tenants WHERE slug = ?').get(tenantSlug);
+    if (tenant) {
+      settings = {
+        restaurant_name: tenant.name,
+        primary_color: tenant.primary_color || '#e11d24',
+        tagline: tenant.tagline || 'Restaurant POS',
+        icon_emoji: tenant.icon_emoji || '🧁',
+        since_year: tenant.since_year || '2024',
+        address: tenant.address || 'Main Branch',
+        tenant_slug: tenant.slug,
+      };
+    }
+  }
+  if (!settings) {
+    settings = db.prepare('SELECT restaurant_name, primary_color, tagline, icon_emoji, since_year, address FROM settings WHERE id = 1').get();
+  }
+
   res.json({
     today: todayStats,
     paymentBreakdown,
@@ -130,6 +149,7 @@ router.get('/dashboard', (req, res) => {
     categoryRevenue,
     hourlySales,
     recentOrders,
+    settings,
   });
 });
 

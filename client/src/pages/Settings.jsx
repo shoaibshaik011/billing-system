@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, Store, Receipt, Palette, ShieldCheck, Mail, Phone, MapPin, Sparkles, Check, Globe } from 'lucide-react';
 import toast from 'react-hot-toast';
 import * as api from '../api';
+import { applyTheme } from '../theme';
 
 const THEME_PALETTES = [
   { name: 'Empire Crimson', color: '#e11d24', desc: 'Dine-in, Biryani & Mughlai', emoji: '🍗' },
@@ -56,11 +57,6 @@ export default function Settings() {
     } finally {
       setLoading(false);
     }
-  }
-
-  function applyTheme(color) {
-    document.documentElement.style.setProperty('--empire-red', color);
-    document.documentElement.style.setProperty('--accent-primary', color);
   }
 
   function handleColorSelect(color) {

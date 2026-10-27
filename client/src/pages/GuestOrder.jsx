@@ -8,6 +8,7 @@ import {
 import QRCode from 'qrcode';
 import toast, { Toaster } from 'react-hot-toast';
 import * as api from '../api';
+import { applyTheme } from '../theme';
 
 export default function GuestOrder() {
   const { tableNumber, slug: paramSlug } = useParams();
@@ -52,10 +53,7 @@ export default function GuestOrder() {
           if (res.success && res.tenant) {
             setTenant(res.tenant);
             const color = res.tenant.primary_color || '#e11d24';
-            document.documentElement.style.setProperty('--empire-red', color);
-            document.documentElement.style.setProperty('--accent-primary', color);
-            document.documentElement.style.setProperty('--empire-red-tint', `${color}14`);
-            document.documentElement.style.setProperty('--empire-red-border', `${color}35`);
+            applyTheme(color);
           }
         })
         .catch(() => {});
@@ -76,8 +74,7 @@ export default function GuestOrder() {
       }
       if (res.settings) {
         const color = res.settings.primary_color || '#e11d24';
-        document.documentElement.style.setProperty('--empire-red', color);
-        document.documentElement.style.setProperty('--accent-primary', color);
+        applyTheme(color);
       }
     } catch (err) {
       if (isInitial) {

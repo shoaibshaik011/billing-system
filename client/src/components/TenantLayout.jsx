@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { AlertCircle, Clock, ShieldAlert, Phone, ExternalLink } from 'lucide-react';
 import * as api from '../api';
+import { applyTheme } from '../theme';
 
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -34,10 +35,7 @@ export default function TenantLayout() {
           setTenant(res.tenant);
           // Dynamically apply this restaurant's customized brand color
           const color = res.tenant.primary_color || '#e11d24';
-          document.documentElement.style.setProperty('--empire-red', color);
-          document.documentElement.style.setProperty('--accent-primary', color);
-          document.documentElement.style.setProperty('--empire-red-tint', `${color}14`);
-          document.documentElement.style.setProperty('--empire-red-border', `${color}35`);
+          applyTheme(color);
         }
       })
       .catch((err) => {

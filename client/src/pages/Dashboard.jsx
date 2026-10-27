@@ -6,8 +6,9 @@ import {
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from 'recharts';
 import * as api from '../api';
+import { applyTheme } from '../theme';
 
-const EMPIRE_CHART_COLORS = ['#e11d24', '#f59e0b', '#16a34a', '#0284c7', '#7c3aed', '#ea580c', '#db2777', '#0891b2'];
+const DEFAULT_CHART_COLORS = ['#f59e0b', '#16a34a', '#0284c7', '#7c3aed', '#ea580c', '#db2777', '#0891b2'];
 
 export default function Dashboard({ tenant }) {
   const [data, setData] = useState(null);
@@ -29,6 +30,10 @@ export default function Dashboard({ tenant }) {
       else setRefreshing(true);
       const result = await api.getDashboard();
       setData(result);
+      const color = tenant?.primary_color || result?.settings?.primary_color;
+      if (color) {
+        applyTheme(color);
+      }
     } catch (err) {
       console.error('Dashboard load failed:', err);
     } finally {
@@ -51,7 +56,15 @@ export default function Dashboard({ tenant }) {
 
   if (!data) return null;
 
-  const { today, paymentBreakdown, topItems, tableStats, revenueTrend, categoryRevenue, hourlySales } = data;
+  const { today, paymentBreakdown, topItems, tableStats, revenueTrend, categoryRevenue, hourlySales, settings } = data;
+
+  const currentBrand = tenant || settings;
+  const brandColor = currentBrand?.primary_color || '#e11d24';
+  const restaurantName = currentBrand?.name || currentBrand?.restaurant_name || 'EMPIRE RESTAURANT';
+  const tagline = currentBrand?.tagline || 'Fine Dining, Takeaway & Cloud Kitchen';
+  const sinceYear = currentBrand?.since_year || '2024';
+  const address = currentBrand?.address || 'Main Branch';
+  const brandChartColors = [brandColor, ...DEFAULT_CHART_COLORS];
 
   const customTooltipStyle = {
     backgroundColor: '#ffffff',
@@ -68,21 +81,19 @@ export default function Dashboard({ tenant }) {
       {/* Signature Hero Banner */}
       <div className="empire-hero-banner animate-in">
         <h1 className="empire-hero-title">
-          {tenant ? tenant.name : 'Order Empire Restaurant Online'}
+          {restaurantName}
         </h1>
         <p className="empire-hero-subtitle">
-          {tenant
-            ? `${tenant.tagline || 'Fine Dining, Takeaway & Cloud Kitchen'} • Est. ${tenant.since_year || '2024'}`
-            : '30+ restaurants across India • Serving authentic taste since 1966'}
+          {tagline} • Est. {sinceYear}
         </p>
         <div className="empire-hero-pills">
           <div className="empire-hero-pill">
             <Compass size={14} />
-            <span>{tenant ? 'Outlet POS Live' : 'Use my location'}</span>
+            <span>Outlet POS Live</span>
           </div>
           <div className="empire-hero-pill">
             <MapPin size={14} />
-            <span>{tenant?.address ? tenant.address.split(',')[0] : 'Jayanagar, Bengaluru ▾'}</span>
+            <span>{address.split(',')[0]}</span>
           </div>
           <div className="empire-hero-pill">
             <Clock size={14} />
@@ -91,12 +102,12 @@ export default function Dashboard({ tenant }) {
 
           {/* Download Desktop POS App Button */}
           <a
-            href={`/api/admin/tenants/${tenant?.slug || 'mrs-home'}/download-launcher`}
+            href={`/api/admin/tenants/${currentBrand?.slug || currentBrand?.tenant_slug || 'mrs-home'}/download-launcher`}
             download
             className="empire-hero-pill"
             style={{
               background: '#ffffff',
-              color: 'var(--empire-red)',
+              color: brandColor,
               fontWeight: 800,
               textDecoration: 'none',
               cursor: 'pointer',
@@ -110,8 +121,8 @@ export default function Dashboard({ tenant }) {
 
           <button
             className="btn btn-secondary btn-sm"
-            style={{ borderRadius: 'var(--radius-full)', background: '#ffffff', color: 'var(--empire-red)', fontWeight: 800, marginLeft: 'auto' }}
-            onClick={() => navigate(tenant ? `/r/${tenant.slug}/orders` : '/orders')}
+            style={{ borderRadius: 'var(--radius-full)', background: '#ffffff', color: brandColor, fontWeight: 800, marginLeft: 'auto' }}
+            onClick={() => navigate(currentBrand?.slug ? `/r/${currentBrand.slug}/orders` : '/orders')}
           >
             <Utensils size={14} /> Take New Order
           </button>
@@ -208,16 +219,16 @@ export default function Dashboard({ tenant }) {
             <ResponsiveContainer width="100%" height={260}>
               <AreaChart data={revenueTrend || []}>
                 <defs>
-                  <linearGradient id="empireRedGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#e11d24" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#e11d24" stopOpacity={0} />
+                  <linearGradient id="brandThemeGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={brandColor} stopOpacity={0.25} />
+                    <stop offset="95%" stopColor={brandColor} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} />
                 <YAxis stroke="#94a3b8" fontSize={12} />
                 <Tooltip contentStyle={customTooltipStyle} />
-                <Area type="monotone" dataKey="revenue" stroke="#e11d24" strokeWidth={2.5} fillOpacity={1} fill="url(#empireRedGrad)" />
+                <Area type="monotone" dataKey="revenue" stroke={brandColor} strokeWidth={2.5} fillOpacity={1} fill="url(#brandThemeGrad)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -235,7 +246,7 @@ export default function Dashboard({ tenant }) {
                 <XAxis dataKey="hour" stroke="#94a3b8" fontSize={12} tickFormatter={(h) => `${h}:00`} />
                 <YAxis stroke="#94a3b8" fontSize={12} />
                 <Tooltip contentStyle={customTooltipStyle} />
-                <Bar dataKey="revenue" fill="#e11d24" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="revenue" fill={brandColor} radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -263,7 +274,7 @@ export default function Dashboard({ tenant }) {
                   paddingAngle={3}
                 >
                   {(categoryRevenue || []).map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={EMPIRE_CHART_COLORS[index % EMPIRE_CHART_COLORS.length]} />
+                    <Cell key={`cell-${index}`} fill={brandChartColors[index % brandChartColors.length]} />
                   ))}
                 </Pie>
                 <Tooltip contentStyle={customTooltipStyle} />
@@ -279,7 +290,7 @@ export default function Dashboard({ tenant }) {
                         width: 10,
                         height: 10,
                         borderRadius: '50%',
-                        background: EMPIRE_CHART_COLORS[i % EMPIRE_CHART_COLORS.length],
+                        background: brandChartColors[i % brandChartColors.length],
                         display: 'inline-block',
                       }}
                     />

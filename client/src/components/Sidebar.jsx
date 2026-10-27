@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../api';
+import { applyTheme } from '../theme';
 
 const navItems = [
   { label: 'Operations', isSection: true },
@@ -30,16 +31,15 @@ export default function Sidebar({ tenant, basePath = '' }) {
   const [settings, setSettings] = useState(null);
 
   useEffect(() => {
-    if (tenant) {
-      // Applied directly from tenant
+    if (tenant?.primary_color) {
+      applyTheme(tenant.primary_color);
       return;
     }
     api.getSettings().then((data) => {
       if (data) {
         setSettings(data);
         if (data.primary_color) {
-          document.documentElement.style.setProperty('--empire-red', data.primary_color);
-          document.documentElement.style.setProperty('--accent-primary', data.primary_color);
+          applyTheme(data.primary_color);
         }
       }
     }).catch(() => {});
