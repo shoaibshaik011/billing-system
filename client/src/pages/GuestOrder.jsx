@@ -10,7 +10,8 @@ import toast, { Toaster } from 'react-hot-toast';
 import * as api from '../api';
 
 export default function GuestOrder() {
-  const { tableNumber, slug } = useParams();
+  const { tableNumber, slug: paramSlug } = useParams();
+  const effectiveSlug = paramSlug || window.location.pathname.match(/^\/r\/([^\/]+)/)?.[1] || '';
   const [data, setData] = useState(null);
   const [tenant, setTenant] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -45,8 +46,8 @@ export default function GuestOrder() {
       loadTableMenu(false);
     }, 3000);
 
-    if (slug) {
-      api.getTenantConfig(slug)
+    if (effectiveSlug) {
+      api.getTenantConfig(effectiveSlug)
         .then((res) => {
           if (res.success && res.tenant) {
             setTenant(res.tenant);
@@ -61,17 +62,22 @@ export default function GuestOrder() {
     }
 
     return () => clearInterval(interval);
-  }, [tableNumber, slug]);
+  }, [tableNumber, effectiveSlug]);
 
   async function loadTableMenu(isInitial = false) {
     try {
       if (isInitial) setLoading(true);
-      const res = await api.getGuestTableMenu(tableNumber || 'T1');
+      const res = await api.getGuestTableMenu(tableNumber || 'T1', effectiveSlug);
       setData(res);
       if (res.activeOrder) {
         setActiveOrder(res.activeOrder);
       } else {
         setActiveOrder(null);
+      }
+      if (res.settings) {
+        const color = res.settings.primary_color || '#e11d24';
+        document.documentElement.style.setProperty('--empire-red', color);
+        document.documentElement.style.setProperty('--accent-primary', color);
       }
     } catch (err) {
       if (isInitial) {
@@ -153,7 +159,7 @@ export default function GuestOrder() {
         payment_preference: paymentPreference,
       };
 
-      const res = await api.placeGuestOrder(tableNumber, payload);
+      const res = await api.placeGuestOrder(tableNumber, payload, effectiveSlug);
       toast.success('🎉 Order sent directly to the kitchen!');
       setCart({});
       setShowCart(false);
@@ -252,13 +258,13 @@ export default function GuestOrder() {
       >
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <span style={{ fontSize: '1.6rem' }}>{tenant?.icon_emoji || '👨‍🍳'}</span>
+            <span style={{ fontSize: '1.6rem' }}>{tenant?.icon_emoji || settings?.icon_emoji || '🍽️'}</span>
             <div>
               <h1 style={{ fontSize: '1.15rem', fontWeight: 900, margin: 0, letterSpacing: -0.3 }}>
-                {tenant?.name || settings?.restaurant_name || 'EMPIRE RESTAURANT'}
+                {tenant?.name || settings?.restaurant_name || 'RESTAURANT'}
               </h1>
               <span style={{ fontSize: '0.72rem', opacity: 0.9 }}>
-                {tenant?.tagline || 'Since 1966 • Authentic Taste'}
+                {tenant?.tagline || settings?.tagline || 'Fresh Food & Authentic Experience'}
               </span>
             </div>
           </div>

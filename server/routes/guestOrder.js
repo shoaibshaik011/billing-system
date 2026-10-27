@@ -4,32 +4,35 @@ const { getDb } = require('../database');
 const router = express.Router();
 
 // Helper to flexibly find table by 'T1', '1', 't1', 'table-1', etc.
-function findTable(db, tableParam) {
-  if (!tableParam) return db.prepare('SELECT * FROM tables ORDER BY id ASC LIMIT 1').get();
+function findTable(db, tableParam, tenantSlug = '') {
+  const tenantClause = tenantSlug ? 'AND tenant_slug = ?' : "AND (tenant_slug = '' OR tenant_slug IS NULL)";
+  const tenantParams = tenantSlug ? [tenantSlug] : [];
+
+  if (!tableParam) return db.prepare(`SELECT * FROM tables WHERE 1=1 ${tenantClause} ORDER BY id ASC LIMIT 1`).get(...tenantParams);
   const raw = tableParam.toString().trim();
   const lower = raw.toLowerCase();
   const numOnly = lower.replace(/[^0-9]/g, '');
 
   // 1. Exact or case-insensitive match
-  let table = db.prepare('SELECT * FROM tables WHERE LOWER(table_number) = ?').get(lower);
+  let table = db.prepare(`SELECT * FROM tables WHERE LOWER(table_number) = ? ${tenantClause}`).get(lower, ...tenantParams);
   if (table) return table;
 
   // 2. Try 'T' + param (e.g. '1' -> 'T1')
-  table = db.prepare('SELECT * FROM tables WHERE LOWER(table_number) = ?').get(`t${lower}`);
+  table = db.prepare(`SELECT * FROM tables WHERE LOWER(table_number) = ? ${tenantClause}`).get(`t${lower}`, ...tenantParams);
   if (table) return table;
 
   // 3. Try number-only match ('T' + numOnly or exact numOnly)
   if (numOnly) {
-    table = db.prepare('SELECT * FROM tables WHERE LOWER(table_number) = ? OR LOWER(table_number) = ?').get(`t${numOnly}`, numOnly);
+    table = db.prepare(`SELECT * FROM tables WHERE (LOWER(table_number) = ? OR LOWER(table_number) = ?) ${tenantClause}`).get(`t${numOnly}`, numOnly, ...tenantParams);
     if (table) return table;
 
     // Try matching by table id
-    table = db.prepare('SELECT * FROM tables WHERE id = ?').get(parseInt(numOnly, 10));
+    table = db.prepare(`SELECT * FROM tables WHERE id = ? ${tenantClause}`).get(parseInt(numOnly, 10), ...tenantParams);
     if (table) return table;
   }
 
-  // 4. Fallback to first available table
-  return db.prepare('SELECT * FROM tables ORDER BY id ASC LIMIT 1').get();
+  // 4. Fallback to first available table for this tenant
+  return db.prepare(`SELECT * FROM tables WHERE 1=1 ${tenantClause} ORDER BY id ASC LIMIT 1`).get(...tenantParams);
 }
 
 // Generate guaranteed unique KOT number
@@ -72,28 +75,59 @@ function computePrepStatus(kots = [], items = []) {
 router.get('/table/:tableNumber', (req, res) => {
   const db = getDb();
   const { tableNumber } = req.params;
+  const tenantSlug = req.headers['x-tenant-slug'] || req.query.tenant_slug || '';
 
-  // Find table flexibly
-  const table = findTable(db, tableNumber);
+  // Find table flexibly scoped by tenant
+  const table = findTable(db, tableNumber, tenantSlug);
   if (!table) {
     return res.status(404).json({ error: 'Table not found. Please verify the QR code.' });
   }
 
-  // Get restaurant profile & settings
-  const settings = db.prepare(`
-    SELECT restaurant_name, address, phone, gst_number, tax_percentage, service_charge_percentage, currency_symbol, primary_color, tagline, icon_emoji, upi_id 
-    FROM settings WHERE id = 1
-  `).get();
+  const effectiveTenantSlug = table.tenant_slug || tenantSlug;
 
-  // Get active menu categories and items
-  const categories = db.prepare('SELECT * FROM categories WHERE is_active = 1 ORDER BY sort_order, name').all();
+  // Get restaurant profile & settings
+  let settings;
+  if (effectiveTenantSlug) {
+    const tenant = db.prepare('SELECT * FROM tenants WHERE slug = ?').get(effectiveTenantSlug);
+    if (tenant) {
+      settings = {
+        restaurant_name: tenant.name,
+        address: tenant.address || 'Main Branch',
+        phone: tenant.owner_phone || '',
+        gst_number: tenant.gst_number || '',
+        tax_percentage: tenant.tax_percentage ?? 5.0,
+        service_charge_percentage: 0,
+        currency_symbol: '₹',
+        primary_color: tenant.primary_color || '#e11d24',
+        tagline: tenant.tagline || 'Fresh Food & Authentic Experience',
+        icon_emoji: tenant.icon_emoji || '🍽️',
+        since_year: tenant.since_year || '2024',
+        upi_id: 'empire.billing@upi',
+        tenant_slug: tenant.slug,
+      };
+    }
+  }
+
+  if (!settings) {
+    settings = db.prepare(`
+      SELECT restaurant_name, address, phone, gst_number, tax_percentage, service_charge_percentage, currency_symbol, primary_color, tagline, icon_emoji, upi_id 
+      FROM settings WHERE id = 1
+    `).get();
+  }
+
+  // Get active menu categories and items strictly scoped to tenant
+  const catClause = effectiveTenantSlug ? 'AND tenant_slug = ?' : "AND (tenant_slug = '' OR tenant_slug IS NULL)";
+  const itemClause = effectiveTenantSlug ? 'AND m.tenant_slug = ?' : "AND (m.tenant_slug = '' OR m.tenant_slug IS NULL)";
+  const tenantParams = effectiveTenantSlug ? [effectiveTenantSlug] : [];
+
+  const categories = db.prepare(`SELECT * FROM categories WHERE is_active = 1 ${catClause} ORDER BY sort_order, name`).all(...tenantParams);
   const menuItems = db.prepare(`
     SELECT m.*, c.name as category_name 
     FROM menu_items m
     LEFT JOIN categories c ON c.id = m.category_id
-    WHERE m.is_available = 1
+    WHERE m.is_available = 1 ${itemClause}
     ORDER BY m.name
-  `).all();
+  `).all(...tenantParams);
 
   // Check if this table has an active order
   const activeOrder = db.prepare(`
@@ -119,6 +153,7 @@ router.get('/table/:tableNumber', (req, res) => {
       capacity: table.capacity,
       floor: table.floor,
       status: table.status,
+      tenant_slug: table.tenant_slug,
     },
     settings,
     categories,
@@ -136,6 +171,7 @@ router.get('/table/:tableNumber', (req, res) => {
 router.post('/table/:tableNumber/order', (req, res) => {
   const db = getDb();
   const { tableNumber } = req.params;
+  const tenantSlug = req.headers['x-tenant-slug'] || req.query.tenant_slug || req.body.tenant_slug || '';
   const {
     items,
     guest_name,
@@ -148,13 +184,21 @@ router.post('/table/:tableNumber/order', (req, res) => {
     return res.status(400).json({ error: 'No items in order' });
   }
 
-  const table = findTable(db, tableNumber);
+  const table = findTable(db, tableNumber, tenantSlug);
   if (!table) {
     return res.status(404).json({ error: 'Table not found' });
   }
 
-  const settings = db.prepare('SELECT tax_percentage, service_charge_percentage FROM settings WHERE id = 1').get();
-  const taxRate = settings ? settings.tax_percentage : 5.0;
+  const effectiveTenantSlug = table.tenant_slug || tenantSlug || '';
+
+  let taxRate = 5.0;
+  if (effectiveTenantSlug) {
+    const tenant = db.prepare('SELECT tax_percentage FROM tenants WHERE slug = ?').get(effectiveTenantSlug);
+    if (tenant && tenant.tax_percentage != null) taxRate = tenant.tax_percentage;
+  } else {
+    const settings = db.prepare('SELECT tax_percentage FROM settings WHERE id = 1').get();
+    if (settings && settings.tax_percentage != null) taxRate = settings.tax_percentage;
+  }
 
   const isPayOnline = payment_preference === 'pay_here' || payment_preference === 'upi';
   const paymentMethod = isPayOnline ? 'upi' : 'cash';
@@ -173,9 +217,9 @@ router.post('/table/:tableNumber/order', (req, res) => {
       const result = db.prepare(`
         INSERT INTO orders (
           order_number, table_id, order_type, order_source, guest_name, guest_phone,
-          special_instructions, payment_preference, payment_method, payment_status, status
+          special_instructions, payment_preference, payment_method, payment_status, status, tenant_slug
         )
-        VALUES (?, ?, 'dine-in', 'qr_guest', ?, ?, ?, ?, ?, ?, 'active')
+        VALUES (?, ?, 'dine-in', 'qr_guest', ?, ?, ?, ?, ?, ?, 'active', ?)
       `).run(
         orderNumber,
         table.id,
@@ -184,7 +228,8 @@ router.post('/table/:tableNumber/order', (req, res) => {
         special_instructions || '',
         isPayOnline ? 'pay_here' : 'counter',
         paymentMethod,
-        paymentStatus
+        paymentStatus,
+        effectiveTenantSlug
       );
 
       order = db.prepare('SELECT * FROM orders WHERE id = ?').get(result.lastInsertRowid);
@@ -198,6 +243,7 @@ router.post('/table/:tableNumber/order', (req, res) => {
           payment_preference = ?,
           payment_method = ?,
           payment_status = CASE WHEN ? = 'paid' THEN 'paid' ELSE payment_status END,
+          tenant_slug = CASE WHEN (tenant_slug IS NULL OR tenant_slug = '') THEN ? ELSE tenant_slug END,
           updated_at = datetime('now')
         WHERE id = ?
       `).run(
@@ -206,6 +252,7 @@ router.post('/table/:tableNumber/order', (req, res) => {
         isPayOnline ? 'pay_here' : 'counter',
         paymentMethod,
         paymentStatus,
+        effectiveTenantSlug,
         order.id
       );
     }
@@ -265,9 +312,9 @@ router.post('/table/:tableNumber/order', (req, res) => {
     const kotNotes = `📱 QR Order Table ${table.table_number}${special_instructions ? ` • Note: ${special_instructions}` : ''}${payNote}`;
 
     db.prepare(`
-      INSERT INTO kot (kot_number, order_id, table_number, status, items, notes)
-      VALUES (?, ?, ?, 'pending', ?, ?)
-    `).run(kotNumber, order.id, table.table_number, JSON.stringify(kotItemsList), kotNotes);
+      INSERT INTO kot (kot_number, order_id, table_number, status, items, notes, tenant_slug)
+      VALUES (?, ?, ?, 'pending', ?, ?, ?)
+    `).run(kotNumber, order.id, table.table_number, JSON.stringify(kotItemsList), kotNotes, effectiveTenantSlug);
 
     // Update table status to occupied
     db.prepare("UPDATE tables SET status = 'occupied' WHERE id = ?").run(table.id);

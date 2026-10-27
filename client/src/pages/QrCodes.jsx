@@ -4,16 +4,18 @@ import { QrCode, Printer, Download, ExternalLink, Sparkles, Smartphone, Utensils
 import toast from 'react-hot-toast';
 import * as api from '../api';
 
-export default function QrCodes() {
+export default function QrCodes({ tenant }) {
   const [tables, setTables] = useState([]);
   const [qrImages, setQrImages] = useState({});
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedFloor, setSelectedFloor] = useState('all');
 
+  const effectiveSlug = tenant?.slug || window.location.pathname.match(/^\/r\/([^\/]+)/)?.[1] || '';
+
   useEffect(() => {
     loadData();
-  }, []);
+  }, [effectiveSlug]);
 
   async function loadData() {
     try {
@@ -34,7 +36,9 @@ export default function QrCodes() {
   async function generateAllQr(tablesList) {
     const images = {};
     for (const t of tablesList) {
-      const guestUrl = `${window.location.origin}/table/${t.table_number}`;
+      const guestUrl = effectiveSlug 
+        ? `${window.location.origin}/r/${effectiveSlug}/table/${t.table_number}`
+        : `${window.location.origin}/table/${t.table_number}`;
       try {
         const dataUrl = await QRCode.toDataURL(guestUrl, {
           width: 320,
@@ -61,7 +65,8 @@ export default function QrCodes() {
     if (!dataUrl) return;
     const a = document.createElement('a');
     a.href = dataUrl;
-    a.download = `QR_Code_${settings?.restaurant_name || 'Restaurant'}_Table_${table.table_number}.png`;
+    const brandName = tenant?.name || settings?.restaurant_name || 'Restaurant';
+    a.download = `QR_${brandName.replace(/\s+/g, '_')}_Table_${table.table_number}.png`;
     a.click();
     toast.success(`Downloaded QR for Table ${table.table_number}`);
   }
@@ -111,14 +116,17 @@ export default function QrCodes() {
             <button className="btn btn-outline-red" onClick={handlePrintAll}>
               <Printer size={16} /> Print All Table Stands
             </button>
-            <a
-              href={`/table/T1`}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-primary"
-            >
-              <Smartphone size={16} /> Test Mobile Order (Table T1)
-            </a>
+            {tables.length > 0 && (
+              <a
+                href={effectiveSlug ? `/r/${effectiveSlug}/table/${tables[0].table_number}` : `/table/${tables[0].table_number}`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-primary"
+                style={{ background: tenant?.primary_color || undefined, borderColor: tenant?.primary_color || undefined }}
+              >
+                <Smartphone size={16} /> Test Mobile Order (Table {tables[0].table_number})
+              </a>
+            )}
           </div>
         </div>
       </div>
@@ -145,7 +153,9 @@ export default function QrCodes() {
         }}
       >
         {filteredTables.map((table) => {
-          const guestUrl = `${window.location.origin}/table/${table.table_number}`;
+          const guestUrl = effectiveSlug 
+            ? `${window.location.origin}/r/${effectiveSlug}/table/${table.table_number}`
+            : `${window.location.origin}/table/${table.table_number}`;
           const qrSrc = qrImages[table.id];
 
           return (
@@ -163,13 +173,15 @@ export default function QrCodes() {
               {/* Stand Card Top */}
               <div
                 style={{
-                  background: 'linear-gradient(135deg, #d31219, #e11d24)',
+                  background: tenant?.primary_color 
+                    ? `linear-gradient(135deg, ${tenant.primary_color}, #111827)`
+                    : 'linear-gradient(135deg, #d31219, #e11d24)',
                   color: '#ffffff',
                   padding: '16px 20px',
                 }}
               >
                 <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.5, opacity: 0.9 }}>
-                  {settings?.restaurant_name || 'EMPIRE RESTAURANT'}
+                  {tenant?.name || settings?.restaurant_name || 'RESTAURANT'}
                 </div>
                 <div style={{ fontSize: '1.4rem', fontWeight: 900, marginTop: 2 }}>
                   TABLE {table.table_number}
@@ -201,7 +213,7 @@ export default function QrCodes() {
                 </div>
 
                 <div style={{ marginTop: 14 }}>
-                  <div className="flex items-center justify-center gap-1.5" style={{ color: 'var(--empire-red)', fontWeight: 800, fontSize: '0.9rem' }}>
+                  <div className="flex items-center justify-center gap-1.5" style={{ color: tenant?.primary_color || 'var(--empire-red)', fontWeight: 800, fontSize: '0.9rem' }}>
                     <Smartphone size={16} /> Scan with Camera to Order
                   </div>
                   <p className="text-xs text-muted" style={{ marginTop: 4 }}>
@@ -222,7 +234,7 @@ export default function QrCodes() {
                 }}
               >
                 <a
-                  href={`/table/${table.table_number}`}
+                  href={effectiveSlug ? `/r/${effectiveSlug}/table/${table.table_number}` : `/table/${table.table_number}`}
                   target="_blank"
                   rel="noreferrer"
                   className="btn btn-ghost btn-sm"

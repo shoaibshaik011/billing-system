@@ -103,8 +103,23 @@ export const upgradeSubscription = (data) => request('/subscription/upgrade', { 
 export const renewSubscription = () => request('/subscription/renew', { method: 'POST' });
 
 // Guest QR Table Ordering
-export const getGuestTableMenu = (tableNumber) => request(`/guest/table/${tableNumber}`);
-export const placeGuestOrder = (tableNumber, data) => request(`/guest/table/${tableNumber}/order`, { method: 'POST', body: data });
+export const getGuestTableMenu = (tableNumber, slug = '') => {
+  const effectiveSlug = slug || getActiveTenantSlug();
+  const query = effectiveSlug ? `?tenant_slug=${encodeURIComponent(effectiveSlug)}` : '';
+  return request(`/guest/table/${tableNumber}${query}`);
+};
+
+export const placeGuestOrder = (tableNumber, data, slug = '') => {
+  const effectiveSlug = slug || data?.tenant_slug || getActiveTenantSlug();
+  const query = effectiveSlug ? `?tenant_slug=${encodeURIComponent(effectiveSlug)}` : '';
+  return request(`/guest/table/${tableNumber}/order${query}`, {
+    method: 'POST',
+    body: {
+      ...data,
+      ...(effectiveSlug ? { tenant_slug: effectiveSlug } : {}),
+    },
+  });
+};
 export const getGuestOrderStatus = (orderId) => request(`/guest/order/${orderId}/status`);
 export const requestGuestBill = (orderId) => request(`/guest/order/${orderId}/request-bill`, { method: 'POST' });
 export const payGuestOrder = (orderId, data) => request(`/guest/order/${orderId}/pay`, { method: 'POST', body: data });
