@@ -32,6 +32,18 @@ function findTable(db, tableParam) {
   return db.prepare('SELECT * FROM tables ORDER BY id ASC LIMIT 1').get();
 }
 
+// Generate guaranteed unique KOT number
+function generateKotNumber(db) {
+  const now = new Date();
+  const timeStr = now.toISOString().slice(11, 19).replace(/:/g, '');
+  const rand = Math.floor(10 + Math.random() * 90);
+  let kotNum = `KOT-${timeStr}-${rand}`;
+  while (db.prepare('SELECT id FROM kot WHERE kot_number = ?').get(kotNum)) {
+    kotNum = `KOT-${timeStr}-${Math.floor(100 + Math.random() * 900)}`;
+  }
+  return kotNum;
+}
+
 // GET table menu & active status for QR ordering
 router.get('/table/:tableNumber', (req, res) => {
   const db = getDb();
@@ -168,8 +180,7 @@ router.post('/table/:tableNumber/order', (req, res) => {
     `).run(subtotal, taxAmount, totalAmount, order.id);
 
     // Generate KOT immediately for kitchen display!
-    const kotCount = db.prepare('SELECT COUNT(*) as count FROM kot WHERE DATE(created_at) = DATE(?)').get(new Date().toISOString().slice(0, 10));
-    const kotNumber = `KOT-${String(kotCount.count + 1).padStart(3, '0')}`;
+    const kotNumber = generateKotNumber(db);
     const kotNotes = `📱 QR Order Table ${table.table_number}${special_instructions ? ` • Note: ${special_instructions}` : ''}`;
 
     db.prepare(`
