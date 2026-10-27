@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Clock, Search, ShoppingBag, Mic, User, LogOut, ShoppingCart, ShieldCheck } from 'lucide-react';
+import { Clock, Search, ShoppingBag, Mic, User, LogOut, ShoppingCart, ShieldCheck, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import * as api from '../api';
@@ -92,11 +92,35 @@ export default function Header({ tenant }) {
           </span>
         </div>
 
+        {/* Download Standalone Desktop App Launcher */}
+        <a
+          href={`/api/admin/tenants/${tenant?.slug || 'mrs-home'}/download-launcher`}
+          download
+          className="btn btn-outline"
+          style={{
+            borderRadius: 'var(--radius-full)',
+            padding: '6px 14px',
+            fontSize: '0.78rem',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            textDecoration: 'none',
+            color: 'var(--text-primary)',
+            background: 'var(--bg-tertiary)',
+            border: '1px solid var(--border-primary)',
+          }}
+          title="Download Desktop POS App Launcher"
+        >
+          <Download size={14} color="var(--empire-red)" />
+          <span>Download App</span>
+        </a>
+
         {/* Active Orders Quick Button */}
         <button
           className="btn btn-primary"
           style={{ borderRadius: 'var(--radius-full)', padding: '7px 16px' }}
-          onClick={() => navigate('/orders')}
+          onClick={() => navigate(tenant ? `/r/${tenant.slug}/orders` : '/orders')}
         >
           <ShoppingCart size={16} />
           <span>Active</span>

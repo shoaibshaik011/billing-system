@@ -12,9 +12,9 @@ export default function Login({ tenant: propTenant }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { slug } = useParams();
-  const { loginWithPassword, loginWithPin, isAuthenticated, user } = useAuth();
+  const { loginWithPassword, loginWithPin, setAuthSession, isAuthenticated, user } = useAuth();
 
-  const [activeTab, setActiveTab] = useState('pin'); // 'pin' or 'password'
+  const [activeTab, setActiveTab] = useState('pin'); // 'pin', 'password', or 'reset'
   const [tenant, setTenant] = useState(propTenant || null);
   const [loading, setLoading] = useState(false);
 
@@ -23,6 +23,13 @@ export default function Login({ tenant: propTenant }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [pin, setPin] = useState('');
+
+  // Set / Reset credentials states
+  const [resetName, setResetName] = useState('');
+  const [resetUsername, setResetUsername] = useState('admin');
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetPin, setResetPin] = useState('1234');
+  const [showResetPassword, setShowResetPassword] = useState(false);
 
   // Clock
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -124,6 +131,41 @@ export default function Login({ tenant: propTenant }) {
       navigate(target, { replace: true });
     } catch (err) {
       toast.error(err.message || 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Submit Set / Reset Admin credentials
+  const handleResetSubmit = async (e) => {
+    e.preventDefault();
+    if (!resetUsername.trim() || !resetPassword) {
+      toast.error('Please enter username and new password');
+      return;
+    }
+    if (!/^\d{4}$/.test(resetPin)) {
+      toast.error('Quick PIN must be exactly 4 digits');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await api.resetTenantPassword({
+        tenant_slug: slug || '',
+        name: resetName || `${tenant?.name || 'Restaurant'} Admin`,
+        username: resetUsername.trim(),
+        password: resetPassword,
+        pin: resetPin,
+      });
+
+      if (res.success && res.user && res.token) {
+        setAuthSession(res.user, res.token);
+        toast.success(`Admin credentials saved! Welcome, ${res.user.name}`);
+        const target = slug ? `/r/${slug}` : '/';
+        navigate(target, { replace: true });
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to save credentials');
     } finally {
       setLoading(false);
     }
@@ -241,25 +283,26 @@ export default function Login({ tenant: propTenant }) {
           </div>
         </div>
 
-        {/* Tab Switcher: PIN vs Password */}
+        {/* Tab Switcher: PIN vs Password vs Reset */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
+            gridTemplateColumns: '1fr 1fr 1fr',
             background: 'var(--bg-tertiary)',
             padding: '4px',
             borderRadius: '12px',
             marginBottom: '22px',
+            gap: '4px',
           }}
         >
           <button
             type="button"
             onClick={() => { setActiveTab('pin'); setPin(''); }}
             style={{
-              padding: '8px 12px',
+              padding: '8px 6px',
               borderRadius: '9px',
               border: 'none',
-              fontSize: '0.82rem',
+              fontSize: '0.78rem',
               fontWeight: 700,
               cursor: 'pointer',
               background: activeTab === 'pin' ? '#ffffff' : 'transparent',
@@ -268,20 +311,20 @@ export default function Login({ tenant: propTenant }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '6px',
+              gap: '4px',
               transition: 'all 0.2s',
             }}
           >
-            <KeyRound size={15} /> Quick PIN
+            <KeyRound size={14} /> Quick PIN
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('password')}
             style={{
-              padding: '8px 12px',
+              padding: '8px 6px',
               borderRadius: '9px',
               border: 'none',
-              fontSize: '0.82rem',
+              fontSize: '0.78rem',
               fontWeight: 700,
               cursor: 'pointer',
               background: activeTab === 'password' ? '#ffffff' : 'transparent',
@@ -290,11 +333,33 @@ export default function Login({ tenant: propTenant }) {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '6px',
+              gap: '4px',
               transition: 'all 0.2s',
             }}
           >
-            <Lock size={15} /> Password
+            <Lock size={14} /> Password
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('reset')}
+            style={{
+              padding: '8px 6px',
+              borderRadius: '9px',
+              border: 'none',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              background: activeTab === 'reset' ? '#ffffff' : 'transparent',
+              color: activeTab === 'reset' ? brandColor : 'var(--text-secondary)',
+              boxShadow: activeTab === 'reset' ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              transition: 'all 0.2s',
+            }}
+          >
+            <ShieldCheck size={14} /> Set / Reset
           </button>
         </div>
 
@@ -502,69 +567,257 @@ export default function Login({ tenant: propTenant }) {
           </form>
         )}
 
-        {/* 1-Click Quick Demo Switcher Chips */}
+        {/* Tab 3: Set / Reset Admin Credentials */}
+        {activeTab === 'reset' && (
+          <form onSubmit={handleResetSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ background: `${brandColor}10`, border: `1px solid ${brandColor}30`, borderRadius: '10px', padding: '10px 12px', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+              <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>🔐 Owner / Admin Setup:</span> Set your private login password and 4-digit POS counter PIN for this restaurant.
+            </div>
+
+            {/* Display Name */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+                Your Name / Title
+              </label>
+              <input
+                type="text"
+                value={resetName}
+                onChange={(e) => setResetName(e.target.value)}
+                placeholder={`${tenant?.name || 'Restaurant'} Owner`}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: '1.5px solid var(--border-primary)',
+                  background: 'var(--bg-tertiary)',
+                  fontSize: '0.85rem',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                }}
+              />
+            </div>
+
+            {/* Admin Username */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+                Admin Username *
+              </label>
+              <input
+                type="text"
+                required
+                value={resetUsername}
+                onChange={(e) => setResetUsername(e.target.value)}
+                placeholder="e.g. admin or mrshome"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: '1.5px solid var(--border-primary)',
+                  background: 'var(--bg-tertiary)',
+                  fontSize: '0.85rem',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                }}
+              />
+            </div>
+
+            {/* New Password */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+                New Password *
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showResetPassword ? 'text' : 'password'}
+                  required
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                  placeholder="Set your secure password"
+                  style={{
+                    width: '100%',
+                    padding: '10px 38px 10px 12px',
+                    borderRadius: '10px',
+                    border: '1.5px solid var(--border-primary)',
+                    background: 'var(--bg-tertiary)',
+                    fontSize: '0.85rem',
+                    color: 'var(--text-primary)',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowResetPassword(!showResetPassword)}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {showResetPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            {/* 4-Digit Quick PIN */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '5px' }}>
+                Quick 4-Digit Counter PIN *
+              </label>
+              <input
+                type="text"
+                required
+                maxLength={4}
+                value={resetPin}
+                onChange={(e) => setResetPin(e.target.value.replace(/\D/g, ''))}
+                placeholder="1234"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: '1.5px solid var(--border-primary)',
+                  background: 'var(--bg-tertiary)',
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  letterSpacing: '4px',
+                  color: 'var(--text-primary)',
+                  outline: 'none',
+                }}
+              />
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '2px', display: 'block' }}>
+                Used for instant 1-tap numpad unlock at the billing counter.
+              </span>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn btn-primary"
+              style={{
+                width: '100%',
+                padding: '12px',
+                fontWeight: 700,
+                fontSize: '0.9rem',
+                backgroundColor: brandColor,
+                borderColor: brandColor,
+                boxShadow: `0 6px 20px ${brandColor}35`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                marginTop: '4px',
+              }}
+            >
+              {loading ? 'Saving Credentials...' : <><span>Save Credentials & Sign In</span> <ArrowRight size={16} /></>}
+            </button>
+          </form>
+        )}
+
+        {/* 1-Click Quick Sign In Chips */}
         <div
           style={{
             borderTop: '1px solid var(--border-primary)',
             paddingTop: '16px',
-            marginTop: '8px',
+            marginTop: '12px',
           }}
         >
           <div style={{ fontSize: '0.73rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px', textAlign: 'center' }}>
-            ⚡ 1-Click Quick Demo Sign In:
+            ⚡ Quick 1-Tap Sign In:
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-            <button
-              type="button"
-              onClick={() => handleQuickDemoLogin('9999')}
-              style={{
-                background: 'var(--bg-tertiary)',
-                border: '1px solid var(--border-primary)',
-                borderRadius: '8px',
-                padding: '8px 4px',
-                textAlign: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              <div style={{ fontSize: '0.8rem', fontWeight: 800 }}>👑 Admin</div>
-              <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '2px' }}>PIN: 9999</div>
-            </button>
+          {slug ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => handleQuickDemoLogin('1234')}
+                style={{
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-primary)',
+                  borderRadius: '8px',
+                  padding: '8px 4px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <div style={{ fontSize: '0.8rem', fontWeight: 800 }}>👑 Default PIN: 1234</div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Auto-unlock POS</div>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => handleQuickDemoLogin('1234')}
-              style={{
-                background: 'var(--bg-tertiary)',
-                border: '1px solid var(--border-primary)',
-                borderRadius: '8px',
-                padding: '8px 4px',
-                textAlign: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              <div style={{ fontSize: '0.8rem', fontWeight: 800 }}>💼 Cashier</div>
-              <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '2px' }}>PIN: 1234</div>
-            </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('reset')}
+                style={{
+                  background: `${brandColor}12`,
+                  border: `1px solid ${brandColor}40`,
+                  borderRadius: '8px',
+                  padding: '8px 4px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: brandColor }}>🔑 Change Password</div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Set private PIN</div>
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => handleQuickDemoLogin('9999')}
+                style={{
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-primary)',
+                  borderRadius: '8px',
+                  padding: '8px 4px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <div style={{ fontSize: '0.8rem', fontWeight: 800 }}>👑 Admin</div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '2px' }}>PIN: 9999</div>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => handleQuickDemoLogin('0000')}
-              style={{
-                background: 'var(--bg-tertiary)',
-                border: '1px solid var(--border-primary)',
-                borderRadius: '8px',
-                padding: '8px 4px',
-                textAlign: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              <div style={{ fontSize: '0.8rem', fontWeight: 800 }}>⚡ Vendor</div>
-              <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '2px' }}>PIN: 0000</div>
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => handleQuickDemoLogin('1234')}
+                style={{
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-primary)',
+                  borderRadius: '8px',
+                  padding: '8px 4px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <div style={{ fontSize: '0.8rem', fontWeight: 800 }}>💼 Cashier</div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '2px' }}>PIN: 1234</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleQuickDemoLogin('0000')}
+                style={{
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-primary)',
+                  borderRadius: '8px',
+                  padding: '8px 4px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <div style={{ fontSize: '0.8rem', fontWeight: 800 }}>⚡ Vendor</div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '2px' }}>PIN: 0000</div>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Guest QR ordering notice */}

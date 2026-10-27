@@ -63,6 +63,13 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('pos_token');
   };
 
+  const setAuthSession = (newUser, newToken) => {
+    setUser(newUser);
+    setToken(newToken);
+    localStorage.setItem('pos_user', JSON.stringify(newUser));
+    localStorage.setItem('pos_token', newToken);
+  };
+
   const hasRole = (...roles) => {
     if (!user) return false;
     return roles.includes(user.role);
@@ -77,6 +84,7 @@ export function AuthProvider({ children }) {
         loading,
         loginWithPassword,
         loginWithPin,
+        setAuthSession,
         logout,
         hasRole,
       }}

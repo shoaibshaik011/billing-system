@@ -7,6 +7,12 @@ const router = express.Router();
 router.get('/dashboard', (req, res) => {
   const db = getDb();
   const today = new Date().toISOString().slice(0, 10);
+  const tenantSlug = req.headers['x-tenant-slug'] || req.query.tenant_slug || '';
+
+  const orderTenantClause = tenantSlug ? 'AND o.tenant_slug = ?' : "AND (o.tenant_slug = '' OR o.tenant_slug IS NULL)";
+  const directOrderTenantClause = tenantSlug ? 'AND tenant_slug = ?' : "AND (tenant_slug = '' OR tenant_slug IS NULL)";
+  const tableTenantClause = tenantSlug ? 'WHERE tenant_slug = ?' : "WHERE (tenant_slug = '' OR tenant_slug IS NULL)";
+  const tenantParams = tenantSlug ? [tenantSlug] : [];
 
   // Today's stats: counts both active and completed orders so revenue and counts update live!
   const todayStats = db.prepare(`
@@ -19,8 +25,8 @@ router.get('/dashboard', (req, res) => {
       COUNT(CASE WHEN status = 'active' THEN 1 END) as active_orders,
       COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_orders,
       COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_orders
-    FROM orders WHERE DATE(created_at) = ?
-  `).get(today);
+    FROM orders WHERE DATE(created_at) = ? ${directOrderTenantClause}
+  `).get(today, ...tenantParams);
 
   // Today's payment breakdown (settled + active preferences)
   const paymentBreakdown = db.prepare(`
@@ -36,7 +42,7 @@ router.get('/dashboard', (req, res) => {
       COUNT(*) as count, 
       COALESCE(SUM(total_amount), 0) as total
     FROM orders 
-    WHERE DATE(created_at) = ? AND status != 'cancelled'
+    WHERE DATE(created_at) = ? AND status != 'cancelled' ${directOrderTenantClause}
     GROUP BY (
       CASE 
         WHEN payment_method = 'cash' THEN 'Cash'
@@ -47,18 +53,18 @@ router.get('/dashboard', (req, res) => {
         ELSE 'Pay at Counter'
       END
     )
-  `).all(today);
+  `).all(today, ...tenantParams);
 
   // Top selling items today (live from all active + completed orders)
   const topItems = db.prepare(`
     SELECT oi.item_name, SUM(oi.quantity) as total_qty, SUM(oi.total_price) as total_revenue
     FROM order_items oi
     JOIN orders o ON o.id = oi.order_id
-    WHERE DATE(o.created_at) = ? AND o.status != 'cancelled' AND oi.status != 'cancelled'
+    WHERE DATE(o.created_at) = ? AND o.status != 'cancelled' AND oi.status != 'cancelled' ${orderTenantClause}
     GROUP BY oi.item_name
     ORDER BY total_qty DESC
     LIMIT 10
-  `).all(today);
+  `).all(today, ...tenantParams);
 
   // Table occupancy
   const tableStats = db.prepare(`
@@ -67,8 +73,8 @@ router.get('/dashboard', (req, res) => {
       COUNT(CASE WHEN status = 'available' THEN 1 END) as available,
       COUNT(CASE WHEN status = 'occupied' THEN 1 END) as occupied,
       COUNT(CASE WHEN status = 'reserved' THEN 1 END) as reserved
-    FROM tables
-  `).get();
+    FROM tables ${tableTenantClause}
+  `).get(...tenantParams);
 
   // Last 7 days revenue trend
   const revenueTrend = db.prepare(`
@@ -76,10 +82,10 @@ router.get('/dashboard', (req, res) => {
       COUNT(*) as orders,
       COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total_amount ELSE 0 END), 0) as revenue
     FROM orders
-    WHERE DATE(created_at) >= DATE('now', '-7 days')
+    WHERE DATE(created_at) >= DATE('now', '-7 days') ${directOrderTenantClause}
     GROUP BY DATE(created_at)
     ORDER BY date
-  `).all();
+  `).all(...tenantParams);
 
   // Category-wise revenue today
   const categoryRevenue = db.prepare(`
@@ -88,10 +94,10 @@ router.get('/dashboard', (req, res) => {
     JOIN orders o ON o.id = oi.order_id
     LEFT JOIN menu_items m ON m.id = oi.menu_item_id
     LEFT JOIN categories cat ON cat.id = m.category_id
-    WHERE DATE(o.created_at) = ? AND o.status != 'cancelled' AND oi.status != 'cancelled'
+    WHERE DATE(o.created_at) = ? AND o.status != 'cancelled' AND oi.status != 'cancelled' ${orderTenantClause}
     GROUP BY cat.name
     ORDER BY revenue DESC
-  `).all(today);
+  `).all(today, ...tenantParams);
 
   // Hourly sales distribution today
   const hourlySales = db.prepare(`
@@ -99,10 +105,10 @@ router.get('/dashboard', (req, res) => {
       COUNT(*) as orders,
       COALESCE(SUM(CASE WHEN status != 'cancelled' THEN total_amount ELSE 0 END), 0) as revenue
     FROM orders 
-    WHERE DATE(created_at) = ? AND status != 'cancelled'
+    WHERE DATE(created_at) = ? AND status != 'cancelled' ${directOrderTenantClause}
     GROUP BY hour
     ORDER BY hour
-  `).all(today);
+  `).all(today, ...tenantParams);
 
   // Recent live orders
   const recentOrders = db.prepare(`
@@ -110,9 +116,10 @@ router.get('/dashboard', (req, res) => {
       o.total_amount, o.status, o.payment_preference, o.payment_status, o.created_at
     FROM orders o
     LEFT JOIN tables t ON t.id = o.table_id
+    WHERE 1=1 ${orderTenantClause}
     ORDER BY o.id DESC
     LIMIT 6
-  `).all();
+  `).all(...tenantParams);
 
   res.json({
     today: todayStats,
@@ -171,17 +178,78 @@ router.get('/reports', (req, res) => {
 // GET/PUT settings
 router.get('/settings', (req, res) => {
   const db = getDb();
+  const tenantSlug = req.headers['x-tenant-slug'] || req.query.tenant_slug || '';
+  if (tenantSlug) {
+    const tenant = db.prepare('SELECT * FROM tenants WHERE slug = ?').get(tenantSlug);
+    if (tenant) {
+      return res.json({
+        id: tenant.id,
+        restaurant_name: tenant.name,
+        address: tenant.address || 'Main Branch',
+        phone: tenant.owner_phone || '',
+        email: '',
+        gst_number: tenant.gst_number || '',
+        tax_percentage: tenant.tax_percentage ?? 5,
+        service_charge_percentage: 0,
+        currency_symbol: '₹',
+        primary_color: tenant.primary_color || '#e11d24',
+        tagline: tenant.tagline || 'Restaurant POS',
+        icon_emoji: tenant.icon_emoji || '🍽️',
+        since_year: tenant.since_year || '2024',
+        tenant_slug: tenant.slug,
+      });
+    }
+  }
   const settings = db.prepare('SELECT * FROM settings WHERE id = 1').get();
   res.json(settings);
 });
 
 router.put('/settings', (req, res) => {
   const db = getDb();
+  const tenantSlug = req.headers['x-tenant-slug'] || req.query.tenant_slug || '';
   const {
     restaurant_name, address, phone, email, gst_number,
     tax_percentage, service_charge_percentage, currency_symbol,
     primary_color, tagline, icon_emoji, since_year
   } = req.body;
+
+  if (tenantSlug) {
+    db.prepare(`
+      UPDATE tenants SET
+        name = COALESCE(?, name),
+        address = COALESCE(?, address),
+        owner_phone = COALESCE(?, owner_phone),
+        gst_number = COALESCE(?, gst_number),
+        tax_percentage = COALESCE(?, tax_percentage),
+        primary_color = COALESCE(?, primary_color),
+        tagline = COALESCE(?, tagline),
+        icon_emoji = COALESCE(?, icon_emoji),
+        since_year = COALESCE(?, since_year),
+        updated_at = datetime('now')
+      WHERE slug = ?
+    `).run(
+      restaurant_name, address || '', phone || '', gst_number || '',
+      tax_percentage ?? 5, primary_color || '#e11d24', tagline || '',
+      icon_emoji || '🍽️', since_year || '2024', tenantSlug
+    );
+    const tenant = db.prepare('SELECT * FROM tenants WHERE slug = ?').get(tenantSlug);
+    return res.json({
+      id: tenant.id,
+      restaurant_name: tenant.name,
+      address: tenant.address,
+      phone: tenant.owner_phone,
+      gst_number: tenant.gst_number,
+      tax_percentage: tenant.tax_percentage,
+      service_charge_percentage: 0,
+      currency_symbol: '₹',
+      primary_color: tenant.primary_color,
+      tagline: tenant.tagline,
+      icon_emoji: tenant.icon_emoji,
+      since_year: tenant.since_year,
+      tenant_slug: tenant.slug,
+    });
+  }
+
   db.prepare(`
     UPDATE settings SET restaurant_name=?, address=?, phone=?, email=?, gst_number=?,
     tax_percentage=?, service_charge_percentage=?, currency_symbol=?,

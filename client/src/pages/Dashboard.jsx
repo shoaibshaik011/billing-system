@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   IndianRupee, ShoppingCart, TrendingUp, Users,
-  ArrowUpRight, Armchair, ChefHat, MapPin, Compass, Clock, Utensils
+  ArrowUpRight, Armchair, ChefHat, MapPin, Compass, Clock, Utensils, Download
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from 'recharts';
 import * as api from '../api';
 
 const EMPIRE_CHART_COLORS = ['#e11d24', '#f59e0b', '#16a34a', '#0284c7', '#7c3aed', '#ea580c', '#db2777', '#0891b2'];
 
-export default function Dashboard() {
+export default function Dashboard({ tenant }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -65,27 +65,53 @@ export default function Dashboard() {
 
   return (
     <div className="page-content">
-      {/* Signature Empire Red Hero Banner */}
+      {/* Signature Hero Banner */}
       <div className="empire-hero-banner animate-in">
-        <h1 className="empire-hero-title">Order Empire Restaurant Online</h1>
-        <p className="empire-hero-subtitle">30+ restaurants across India • Serving authentic taste since 1966</p>
+        <h1 className="empire-hero-title">
+          {tenant ? tenant.name : 'Order Empire Restaurant Online'}
+        </h1>
+        <p className="empire-hero-subtitle">
+          {tenant
+            ? `${tenant.tagline || 'Fine Dining, Takeaway & Cloud Kitchen'} • Est. ${tenant.since_year || '2024'}`
+            : '30+ restaurants across India • Serving authentic taste since 1966'}
+        </p>
         <div className="empire-hero-pills">
           <div className="empire-hero-pill">
             <Compass size={14} />
-            <span>Use my location</span>
+            <span>{tenant ? 'Outlet POS Live' : 'Use my location'}</span>
           </div>
           <div className="empire-hero-pill">
             <MapPin size={14} />
-            <span>Jayanagar, Bengaluru ▾</span>
+            <span>{tenant?.address ? tenant.address.split(',')[0] : 'Jayanagar, Bengaluru ▾'}</span>
           </div>
           <div className="empire-hero-pill">
             <Clock size={14} />
-            <span>Open from 11:00 AM – 1:00 AM</span>
+            <span>Open for Dining & Delivery</span>
           </div>
+
+          {/* Download Desktop POS App Button */}
+          <a
+            href={`/api/admin/tenants/${tenant?.slug || 'mrs-home'}/download-launcher`}
+            download
+            className="empire-hero-pill"
+            style={{
+              background: '#ffffff',
+              color: 'var(--empire-red)',
+              fontWeight: 800,
+              textDecoration: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            }}
+            title="Download Standalone Desktop POS Launcher App"
+          >
+            <Download size={14} />
+            <span>Download Desktop App</span>
+          </a>
+
           <button
             className="btn btn-secondary btn-sm"
             style={{ borderRadius: 'var(--radius-full)', background: '#ffffff', color: 'var(--empire-red)', fontWeight: 800, marginLeft: 'auto' }}
-            onClick={() => navigate('/orders')}
+            onClick={() => navigate(tenant ? `/r/${tenant.slug}/orders` : '/orders')}
           >
             <Utensils size={14} /> Take New Order
           </button>

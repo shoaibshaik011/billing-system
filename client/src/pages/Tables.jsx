@@ -4,7 +4,7 @@ import { Plus, Users as UsersIcon, X, MapPin, Store, Utensils, Receipt } from 'l
 import toast from 'react-hot-toast';
 import * as api from '../api';
 
-export default function Tables() {
+export default function Tables({ tenant }) {
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -12,6 +12,7 @@ export default function Tables() {
   const [form, setForm] = useState({ table_number: '', capacity: 4, floor: 'Ground' });
   const [floorFilter, setFloorFilter] = useState('all');
   const navigate = useNavigate();
+  const basePath = tenant ? `/r/${tenant.slug}` : '';
 
   useEffect(() => {
     loadTables();
@@ -53,11 +54,11 @@ export default function Tables() {
 
   function handleTableClick(table) {
     if (table.status === 'available') {
-      navigate(`/orders?new=1&table_id=${table.id}&table_number=${table.table_number}`);
+      navigate(`${basePath}/orders?new=1&table_id=${table.id}&table_number=${table.table_number}`);
     } else if (table.active_order_id) {
-      navigate(`/orders?order_id=${table.active_order_id}`);
+      navigate(`${basePath}/orders?order_id=${table.active_order_id}`);
     } else {
-      navigate('/orders');
+      navigate(`${basePath}/orders`);
     }
   }
 

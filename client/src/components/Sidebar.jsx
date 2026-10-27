@@ -3,8 +3,9 @@ import { NavLink, Link } from 'react-router-dom';
 import {
   LayoutDashboard, UtensilsCrossed, Grid3X3, ShoppingCart,
   ChefHat, Users, Settings, Receipt, QrCode, Sparkles, MapPin,
-  ShieldCheck, ArrowLeft
+  ShieldCheck, ArrowLeft, Download
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import * as api from '../api';
 
 const navItems = [
@@ -25,6 +26,7 @@ const navItems = [
 ];
 
 export default function Sidebar({ tenant, basePath = '' }) {
+  const { user } = useAuth();
   const [settings, setSettings] = useState(null);
 
   useEffect(() => {
@@ -50,10 +52,16 @@ export default function Sidebar({ tenant, basePath = '' }) {
   const tagline = currentBrand?.tagline || 'Restaurant & Hotel POS';
   const address = currentBrand?.address || 'Main Branch';
 
+  // Filter navigation items: if in tenant view, hide SaaS Vendor Hub unless superadmin
+  const visibleNavItems = navItems.filter(item => {
+    if (item.isVendor && tenant && user?.role !== 'superadmin') return false;
+    return true;
+  });
+
   return (
     <aside className="sidebar">
-      {/* If in tenant view, show quick link back to SaaS Vendor Hub */}
-      {tenant && (
+      {/* If in tenant view and user is superadmin, show quick link back to SaaS Vendor Hub */}
+      {tenant && user?.role === 'superadmin' && (
         <div style={{ padding: '8px 14px 0' }}>
           <Link
             to="/admin"
@@ -106,7 +114,7 @@ export default function Sidebar({ tenant, basePath = '' }) {
       </div>
 
       <nav className="sidebar-nav">
-        {navItems.map((item, i) => {
+        {visibleNavItems.map((item, i) => {
           if (item.isSection) {
             return <div key={i} className="nav-section-label">{item.label}</div>;
           }
@@ -140,6 +148,34 @@ export default function Sidebar({ tenant, basePath = '' }) {
           );
         })}
       </nav>
+
+      {/* Download Standalone Offline Desktop App Launcher */}
+      <div style={{ padding: '8px 14px 10px' }}>
+        <a
+          href={`/api/admin/tenants/${currentBrand?.slug || 'mrs-home'}/download-launcher`}
+          download
+          className="btn btn-outline"
+          style={{
+            width: '100%',
+            fontSize: '0.74rem',
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            padding: '8px 10px',
+            background: 'var(--bg-tertiary)',
+            borderRadius: '8px',
+            textDecoration: 'none',
+            color: 'var(--text-primary)',
+            border: '1px solid var(--border-primary)',
+          }}
+          title="Download Desktop App for Mac & Windows"
+        >
+          <Download size={13} color="var(--empire-red)" />
+          <span>Download Desktop App</span>
+        </a>
+      </div>
 
       <div className="sidebar-footer">
         <div style={{ fontWeight: 700, color: 'var(--empire-red)', marginBottom: 2 }}>

@@ -3,7 +3,7 @@ import {
   Building2, Plus, Send, ExternalLink, RefreshCw, Copy, Check,
   Sparkles, ShieldCheck, Phone, MapPin, Calendar, Clock,
   Smartphone, Monitor, ChevronRight, Store, AlertCircle, CheckCircle2,
-  Sliders, MessageSquare
+  Sliders, MessageSquare, Download
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import * as api from '../api';
@@ -396,6 +396,29 @@ export default function SuperAdmin() {
                     <ExternalLink size={14} /> Open POS App
                   </a>
 
+                  {/* Download Standalone Desktop App Launcher */}
+                  <a
+                    href={`/api/admin/tenants/${tenant.slug}/download-launcher`}
+                    download
+                    className="btn btn-outline"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      textDecoration: 'none',
+                      color: 'var(--text-primary)',
+                      background: 'var(--bg-tertiary)',
+                    }}
+                    title="Download Desktop App Launcher for client"
+                  >
+                    <Download size={14} color="var(--empire-red)" /> Download App
+                  </a>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
                   {/* Renew +30 Days button */}
                   <button
                     onClick={() => handleRenew(tenant.id, tenant.name)}
@@ -410,7 +433,7 @@ export default function SuperAdmin() {
                       color: 'var(--text-primary)',
                     }}
                   >
-                    <Clock size={14} /> +30 Days Renew
+                    <Clock size={14} /> +30 Days Renew Subscription
                   </button>
                 </div>
 

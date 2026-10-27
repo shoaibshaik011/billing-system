@@ -1,9 +1,26 @@
 const API_BASE = '/api';
 
+export function getActiveTenantSlug() {
+  const match = window.location.pathname.match(/^\/r\/([^\/]+)/);
+  if (match) return match[1];
+  try {
+    const stored = sessionStorage.getItem('tenant_slug');
+    if (stored) return stored;
+  } catch (e) {}
+  return '';
+}
+
 async function request(url, options = {}) {
+  const tenantSlug = getActiveTenantSlug();
+  const headers = { 
+    'Content-Type': 'application/json',
+    ...(tenantSlug ? { 'x-tenant-slug': tenantSlug } : {}),
+    ...(options.headers || {})
+  };
+
   const config = {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers,
   };
 
   if (config.body && typeof config.body === 'object') {
@@ -103,6 +120,7 @@ export const deleteTenant = (id) => request(`/admin/tenants/${id}`, { method: 'D
 
 // Staff & User Authentication
 export const login = (data) => request('/auth/login', { method: 'POST', body: data });
+export const resetTenantPassword = (data) => request('/auth/reset-tenant-password', { method: 'POST', body: data });
 export const getUsers = () => request('/auth/users');
 export const createUser = (data) => request('/auth/users', { method: 'POST', body: data });
 export const updateUser = (id, data) => request(`/auth/users/${id}`, { method: 'PUT', body: data });

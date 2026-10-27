@@ -68,6 +68,15 @@ router.get('/', (req, res) => {
   const conditions = [];
   const params = [];
 
+  const tenantSlug = req.headers['x-tenant-slug'] || req.query.tenant_slug || '';
+
+  if (tenantSlug) {
+    conditions.push('o.tenant_slug = ?');
+    params.push(tenantSlug);
+  } else {
+    conditions.push("(o.tenant_slug = '' OR o.tenant_slug IS NULL)");
+  }
+
   if (status) {
     conditions.push('o.status = ?');
     params.push(status);
@@ -121,7 +130,24 @@ router.get('/:id', (req, res) => {
   `).all(req.params.id);
 
   const kots = db.prepare('SELECT * FROM kot WHERE order_id = ? ORDER BY created_at').all(req.params.id);
-  const settings = db.prepare('SELECT * FROM settings WHERE id = 1').get();
+  
+  let settings = null;
+  if (order.tenant_slug) {
+    const tenant = db.prepare('SELECT * FROM tenants WHERE slug = ?').get(order.tenant_slug);
+    if (tenant) {
+      settings = {
+        restaurant_name: tenant.name,
+        address: tenant.address,
+        phone: tenant.owner_phone,
+        gst_number: tenant.gst_number,
+        tax_percentage: tenant.tax_percentage || 5.0,
+        primary_color: tenant.primary_color,
+      };
+    }
+  }
+  if (!settings) {
+    settings = db.prepare('SELECT * FROM settings WHERE id = 1').get();
+  }
 
   res.json({ ...order, items, kots, settings });
 });
@@ -130,14 +156,15 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   const db = getDb();
   const { table_id, customer_id, order_type, waiter_name, notes } = req.body;
+  const tenantSlug = req.headers['x-tenant-slug'] || req.body.tenant_slug || '';
 
   try {
     const orderNumber = generateOrderNumber();
 
     const result = db.prepare(`
-      INSERT INTO orders (order_number, table_id, customer_id, order_type, waiter_name, notes)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(orderNumber, table_id || null, customer_id || null, order_type || 'dine-in', waiter_name || '', notes || '');
+      INSERT INTO orders (order_number, table_id, customer_id, order_type, waiter_name, notes, tenant_slug)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(orderNumber, table_id || null, customer_id || null, order_type || 'dine-in', waiter_name || '', notes || '', tenantSlug);
 
     // Update table status if dine-in
     if (table_id && order_type !== 'takeaway' && order_type !== 'delivery') {

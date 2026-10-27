@@ -227,6 +227,94 @@ function initializeDatabase() {
       db.exec("ALTER TABLE settings ADD COLUMN upi_id TEXT DEFAULT 'empire.billing@upi';");
     }
 
+    // Add tenant_slug to tables, orders, categories, menu_items, customers, kot
+    const currentTableCols = db.pragma('table_info(tables)').map(c => c.name);
+    if (!currentTableCols.includes('tenant_slug')) {
+      db.exec("ALTER TABLE tables ADD COLUMN tenant_slug TEXT DEFAULT '';");
+    }
+
+    if (!orderCols.includes('tenant_slug')) {
+      db.exec("ALTER TABLE orders ADD COLUMN tenant_slug TEXT DEFAULT '';");
+    }
+
+    const catCols = db.pragma('table_info(categories)').map(c => c.name);
+    if (!catCols.includes('tenant_slug')) {
+      db.exec("ALTER TABLE categories ADD COLUMN tenant_slug TEXT DEFAULT '';");
+    }
+
+    const menuCols = db.pragma('table_info(menu_items)').map(c => c.name);
+    if (!menuCols.includes('tenant_slug')) {
+      db.exec("ALTER TABLE menu_items ADD COLUMN tenant_slug TEXT DEFAULT '';");
+    }
+
+    const custCols = db.pragma('table_info(customers)').map(c => c.name);
+    if (!custCols.includes('tenant_slug')) {
+      db.exec("ALTER TABLE customers ADD COLUMN tenant_slug TEXT DEFAULT '';");
+    }
+
+    const kotCols = db.pragma('table_info(kot)').map(c => c.name);
+    if (!kotCols.includes('tenant_slug')) {
+      db.exec("ALTER TABLE kot ADD COLUMN tenant_slug TEXT DEFAULT '';");
+    }
+
+    // Migrate tables to composite UNIQUE(table_number, tenant_slug)
+    const tablesSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='tables'").get()?.sql || '';
+    if (tablesSql.includes('table_number TEXT NOT NULL UNIQUE') || tablesSql.includes('table_number TEXT UNIQUE')) {
+      try {
+        db.exec(`
+          PRAGMA foreign_keys=off;
+          CREATE TABLE IF NOT EXISTS tables_migrated (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            table_number TEXT NOT NULL,
+            capacity INTEGER DEFAULT 4,
+            status TEXT DEFAULT 'available' CHECK(status IN ('available', 'occupied', 'reserved', 'maintenance')),
+            floor TEXT DEFAULT 'Ground',
+            position_x REAL DEFAULT 0,
+            position_y REAL DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            qr_code_token TEXT,
+            tenant_slug TEXT DEFAULT '',
+            UNIQUE(table_number, tenant_slug)
+          );
+          INSERT OR IGNORE INTO tables_migrated (id, table_number, capacity, status, floor, position_x, position_y, created_at, qr_code_token, tenant_slug)
+          SELECT id, table_number, capacity, status, floor, position_x, position_y, created_at, qr_code_token, COALESCE(tenant_slug, '') FROM tables;
+          DROP TABLE tables;
+          ALTER TABLE tables_migrated RENAME TO tables;
+          PRAGMA foreign_keys=on;
+        `);
+      } catch (e) {
+        console.error('Table migration error:', e.message);
+      }
+    }
+
+    // Migrate categories to composite UNIQUE(name, tenant_slug)
+    const catsSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='categories'").get()?.sql || '';
+    if (catsSql.includes('name TEXT NOT NULL UNIQUE') || catsSql.includes('name TEXT UNIQUE')) {
+      try {
+        db.exec(`
+          PRAGMA foreign_keys=off;
+          CREATE TABLE IF NOT EXISTS categories_migrated (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            icon TEXT DEFAULT '🍽️',
+            sort_order INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT (datetime('now')),
+            tenant_slug TEXT DEFAULT '',
+            UNIQUE(name, tenant_slug)
+          );
+          INSERT OR IGNORE INTO categories_migrated (id, name, description, icon, sort_order, is_active, created_at, tenant_slug)
+          SELECT id, name, description, icon, sort_order, is_active, created_at, COALESCE(tenant_slug, '') FROM categories;
+          DROP TABLE categories;
+          ALTER TABLE categories_migrated RENAME TO categories;
+          PRAGMA foreign_keys=on;
+        `);
+      } catch (e) {
+        console.error('Category migration error:', e.message);
+      }
+    }
+
     // Master Multi-Tenant Restaurants Table
     db.exec(`
       CREATE TABLE IF NOT EXISTS tenants (
@@ -431,6 +519,93 @@ function initializeDatabase() {
     });
     insertMany(sampleItems);
   }
+
+  // Seed data for all existing tenants if missing
+  try {
+    const tenants = db.prepare('SELECT * FROM tenants').all();
+    for (const tenant of tenants) {
+      seedTenantData(db, tenant);
+    }
+  } catch (err) {
+    console.error('Tenant seeding notice:', err.message);
+  }
 }
 
-module.exports = { getDb };
+function seedTenantData(db, tenant) {
+  if (!tenant || !tenant.slug) return;
+  const slug = tenant.slug;
+  if (slug === 'empire') return; // Empire uses the root tables
+
+  // 1. Ensure admin user exists for this tenant
+  const existingUser = db.prepare("SELECT id FROM users WHERE tenant_slug = ? AND role = 'admin'").get(slug);
+  if (!existingUser) {
+    db.prepare(`
+      INSERT INTO users (name, username, password, pin, role, email, avatar, tenant_slug)
+      VALUES (?, ?, ?, ?, 'admin', ?, '👑', ?)
+    `).run(
+      `${tenant.name} Admin`,
+      `${slug}_admin`,
+      'admin123',
+      '1234',
+      tenant.owner_phone ? `${tenant.owner_phone.replace(/[^0-9]/g, '')}@pos.local` : '',
+      slug
+    );
+  }
+
+  // 2. Ensure starter tables exist for this tenant
+  const tableCount = db.prepare('SELECT COUNT(*) as count FROM tables WHERE tenant_slug = ?').get(slug);
+  if (tableCount.count === 0) {
+    const insertTable = db.prepare('INSERT INTO tables (table_number, capacity, floor, tenant_slug) VALUES (?, ?, ?, ?)');
+    const countToCreate = Math.min(tenant.max_tables || 10, 5);
+    for (let i = 1; i <= countToCreate; i++) {
+      insertTable.run(i, i % 2 === 0 ? 4 : 2, 'Ground', slug);
+    }
+  }
+
+  // 3. Ensure starter categories & menu items exist for this tenant
+  const catCount = db.prepare('SELECT COUNT(*) as count FROM categories WHERE tenant_slug = ?').get(slug);
+  if (catCount.count === 0) {
+    const insertCat = db.prepare('INSERT INTO categories (name, icon, sort_order, tenant_slug) VALUES (?, ?, ?, ?)');
+    const insertItem = db.prepare('INSERT INTO menu_items (name, description, price, category_id, is_veg, is_available, preparation_time, tenant_slug) VALUES (?, ?, ?, ?, ?, 1, ?, ?)');
+
+    const niche = (tenant.niche || '').toLowerCase();
+    if (niche.includes('cafe') || niche.includes('bakery')) {
+      const c1 = insertCat.run('Hot & Cold Brews', '☕', 1, slug);
+      const c2 = insertCat.run('Bakery & Breads', '🥐', 2, slug);
+      const c3 = insertCat.run('Sandwiches & Snacks', '🥪', 3, slug);
+      const c4 = insertCat.run('Desserts', '🍰', 4, slug);
+
+      insertItem.run('Cappuccino', 'Freshly brewed espresso with steamed milk foam', 140, c1.lastInsertRowid, 1, 5, slug);
+      insertItem.run('Iced Hazelnut Latte', 'Chilled espresso, milk, and hazelnut syrup', 180, c1.lastInsertRowid, 1, 5, slug);
+      insertItem.run('Butter Croissant', 'Flaky, buttery French style baked croissant', 90, c2.lastInsertRowid, 1, 5, slug);
+      insertItem.run('Grilled Club Sandwich', 'Toasted triple-decker with cheese and veggies', 150, c3.lastInsertRowid, 1, 10, slug);
+      insertItem.run('Chocolate Brownie', 'Warm fudge brownie with chocolate drizzle', 120, c4.lastInsertRowid, 1, 5, slug);
+    } else if (niche.includes('veg')) {
+      const c1 = insertCat.run('Starters & Soups', '🥗', 1, slug);
+      const c2 = insertCat.run('Main Gravies', '🍛', 2, slug);
+      const c3 = insertCat.run('Breads & Rice', '🍚', 3, slug);
+      const c4 = insertCat.run('Beverages', '🥤', 4, slug);
+
+      insertItem.run('Paneer Tikka', 'Charcoal grilled cottage cheese skewers', 220, c1.lastInsertRowid, 1, 15, slug);
+      insertItem.run('Paneer Butter Masala', 'Rich cottage cheese in butter tomato gravy', 240, c2.lastInsertRowid, 1, 15, slug);
+      insertItem.run('Dal Makhani', 'Slow-cooked black lentils in creamy butter', 190, c2.lastInsertRowid, 1, 10, slug);
+      insertItem.run('Butter Naan', 'Clay oven baked bread brushed with butter', 45, c3.lastInsertRowid, 1, 5, slug);
+      insertItem.run('Veg Biryani', 'Fragrant basmati rice cooked with fresh spices', 180, c3.lastInsertRowid, 1, 15, slug);
+      insertItem.run('Sweet Lassi', 'Traditional chilled yogurt drink', 80, c4.lastInsertRowid, 1, 5, slug);
+    } else {
+      const c1 = insertCat.run('Signature Dishes', '⭐', 1, slug);
+      const c2 = insertCat.run('Main Course', '🍛', 2, slug);
+      const c3 = insertCat.run('Breads & Rice', '🍚', 3, slug);
+      const c4 = insertCat.run('Beverages & Desserts', '🍹', 4, slug);
+
+      insertItem.run(`${tenant.name} Special Thali`, 'Our chef signature meal platter', 250, c1.lastInsertRowid, 1, 15, slug);
+      insertItem.run('Paneer Butter Masala', 'Creamy spiced cottage cheese curry', 220, c2.lastInsertRowid, 1, 15, slug);
+      insertItem.run('Dal Tadka with Jeera Rice', 'Yellow lentils tempered with ghee & spices with fragrant rice', 170, c2.lastInsertRowid, 1, 10, slug);
+      insertItem.run('Tandoori Roti (2 pcs)', 'Fresh whole wheat flatbread from the tandoor', 40, c3.lastInsertRowid, 1, 5, slug);
+      insertItem.run('Fresh Lime Soda', 'Refreshing limeade served sweet or salted', 60, c4.lastInsertRowid, 1, 5, slug);
+      insertItem.run('Gulab Jamun (2 pcs)', 'Warm milk dumplings soaked in cardamom sugar syrup', 70, c4.lastInsertRowid, 1, 5, slug);
+    }
+  }
+}
+
+module.exports = { getDb, seedTenantData };

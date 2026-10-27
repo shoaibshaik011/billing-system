@@ -6,13 +6,21 @@ const router = express.Router();
 // GET all categories
 router.get('/', (req, res) => {
   const db = getDb();
+  const tenantSlug = req.headers['x-tenant-slug'] || req.query.tenant_slug || '';
+
+  const whereClause = tenantSlug
+    ? 'WHERE c.tenant_slug = ?'
+    : "WHERE (c.tenant_slug = '' OR c.tenant_slug IS NULL)";
+  const params = tenantSlug ? [tenantSlug] : [];
+
   const categories = db.prepare(`
     SELECT c.*, COUNT(m.id) as item_count 
     FROM categories c 
     LEFT JOIN menu_items m ON m.category_id = c.id AND m.is_available = 1
+    ${whereClause}
     GROUP BY c.id 
     ORDER BY c.sort_order
-  `).all();
+  `).all(...params);
   res.json(categories);
 });
 
@@ -20,10 +28,12 @@ router.get('/', (req, res) => {
 router.post('/', (req, res) => {
   const db = getDb();
   const { name, description, icon, sort_order } = req.body;
+  const tenantSlug = req.headers['x-tenant-slug'] || req.body.tenant_slug || '';
+
   try {
     const result = db.prepare(
-      'INSERT INTO categories (name, description, icon, sort_order) VALUES (?, ?, ?, ?)'
-    ).run(name, description || '', icon || '🍽️', sort_order || 0);
+      'INSERT INTO categories (name, description, icon, sort_order, tenant_slug) VALUES (?, ?, ?, ?, ?)'
+    ).run(name, description || '', icon || '🍽️', sort_order || 0, tenantSlug);
     const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json(category);
   } catch (err) {

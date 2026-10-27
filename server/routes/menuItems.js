@@ -7,6 +7,8 @@ const router = express.Router();
 router.get('/', (req, res) => {
   const db = getDb();
   const { category_id, available_only } = req.query;
+  const tenantSlug = req.headers['x-tenant-slug'] || req.query.tenant_slug || '';
+
   let query = `
     SELECT m.*, c.name as category_name 
     FROM menu_items m 
@@ -14,6 +16,13 @@ router.get('/', (req, res) => {
   `;
   const params = [];
   const conditions = [];
+
+  if (tenantSlug) {
+    conditions.push('m.tenant_slug = ?');
+    params.push(tenantSlug);
+  } else {
+    conditions.push("(m.tenant_slug = '' OR m.tenant_slug IS NULL)");
+  }
 
   if (category_id) {
     conditions.push('m.category_id = ?');
@@ -48,11 +57,13 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   const db = getDb();
   const { name, description, price, category_id, is_veg, is_available, preparation_time, image_url } = req.body;
+  const tenantSlug = req.headers['x-tenant-slug'] || req.body.tenant_slug || '';
+
   try {
     const result = db.prepare(
-      `INSERT INTO menu_items (name, description, price, category_id, is_veg, is_available, preparation_time, image_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(name, description || '', price, category_id || null, is_veg ?? 1, is_available ?? 1, preparation_time || 15, image_url || '');
+      `INSERT INTO menu_items (name, description, price, category_id, is_veg, is_available, preparation_time, image_url, tenant_slug)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(name, description || '', price, category_id || null, is_veg ?? 1, is_available ?? 1, preparation_time || 15, image_url || '', tenantSlug);
     const item = db.prepare('SELECT m.*, c.name as category_name FROM menu_items m LEFT JOIN categories c ON c.id = m.category_id WHERE m.id = ?').get(result.lastInsertRowid);
     res.status(201).json(item);
   } catch (err) {
